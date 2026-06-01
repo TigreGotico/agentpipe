@@ -163,3 +163,29 @@ async with agent.session() as sess:
 | List models | - | - | `opencode models` |
 | Stats | Per-invocation | Per-invocation | `opencode stats` |
 | Auth status | `claude auth status --json` | - | `opencode providers list` |
+
+## Quota and Usage
+
+```python
+from agentpipe import Agent, check_quota, parse_rate_limit_error, AgentProcessError
+
+# Check quota/plan status across providers
+for provider in ["claude", "gemini", "opencode"]:
+    status = await check_quota(provider)
+    print(f"{provider}: auth={status.authenticated} "
+          f"sub={status.subscription_type} "
+          f"rate_limited={status.rate_limited} "
+          f"models={len(status.available_models)}")
+
+# Claude: authenticated, subscription_type="max", plan_limits
+# Opencode: authenticated, available_models list, usage_stats
+
+# Parse rate-limit errors from failed calls
+agent = Agent("gemini")
+try:
+    result = await agent.generate("hello")
+except AgentProcessError as e:
+    info = parse_rate_limit_error("gemini", e)
+    # info = {"provider": "gemini", "rate_limited": True, "resets_in_seconds": 8}
+    print(f"Rate limited! Resets in {info['resets_in_seconds']}s")
+```

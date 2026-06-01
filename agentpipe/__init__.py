@@ -1,6 +1,7 @@
 from ._agent import DEFAULT_CWD, DEFAULT_MODELS, Agent
 from ._executor import AgentProcessError, AsyncSubprocessExecutor
 from ._pipeline import delegate, fan_out, map_concurrent, retry_until
+from ._quota import QuotaStatus, check_quota, parse_rate_limit_error
 from ._session import AgentSession
 from ._types import (
     AgentEvent,
@@ -37,6 +38,7 @@ __all__ = [
     "McpServerConfig",
     "ModelInfo",
     "Provider",
+    "QuotaStatus",
     "SessionEntry",
     "SessionInfo",
     "SessionUsage",
@@ -46,6 +48,8 @@ __all__ = [
     "ToolResultEvent",
     "UsageEvent",
     "AsyncSubprocessExecutor",
+    "check_quota",
+    "parse_rate_limit_error",
     "fan_out",
     "delegate",
     "retry_until",
