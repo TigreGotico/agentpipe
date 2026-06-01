@@ -1,4 +1,17 @@
 from ._agent import DEFAULT_CWD, DEFAULT_MODELS, Agent
+from .cascade import (
+    CASCADE_PROFILES,
+    CascadeAttempt,
+    CascadeResult,
+    ErrorType,
+    ModelTier,
+    MODEL_TIER_MAP,
+    cascade,
+    cascade_coding,
+    cascade_fast_free,
+    cascade_free_only,
+    tier_summary,
+)
 from ._executor import AgentProcessError, AsyncSubprocessExecutor
 from ._pipeline import delegate, fan_out, map_concurrent, retry_until
 from ._quota import QuotaStatus, check_quota, parse_rate_limit_error
@@ -33,10 +46,16 @@ __all__ = [
     "CommandSpec",
     "DEFAULT_CWD",
     "DEFAULT_MODELS",
+    "CASCADE_PROFILES",
+    "CascadeAttempt",
+    "CascadeResult",
+    "ErrorType",
     "GenerationResult",
     "HttpMcpServer",
     "McpServerConfig",
     "ModelInfo",
+    "ModelTier",
+    "MODEL_TIER_MAP",
     "Provider",
     "QuotaStatus",
     "SessionEntry",
@@ -54,4 +73,9 @@ __all__ = [
     "delegate",
     "retry_until",
     "map_concurrent",
+    "cascade",
+    "cascade_coding",
+    "cascade_fast_free",
+    "cascade_free_only",
+    "tier_summary",
 ]
