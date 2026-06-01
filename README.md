@@ -2,8 +2,6 @@
 
 Async Python wrapper for coding agent CLIs (Claude Code, Gemini, Opencode). Zero dependencies. Python 3.10+.
 
-**[Full documentation →](docs/index.md)**
-
 ## Install
 
 ```bash
@@ -96,3 +94,17 @@ results = await map_concurrent([Agent("claude"), Agent("gemini")], "Explain")
 | Auth status | Yes | Limited | Yes |
 | Model listing | — | — | Yes |
 | Plan variants | Sonnet/Haiku/Opus | Flash/Pro | Free/Zen/Go |
+
+## Documentation
+
+- **[Getting Started](docs/getting-started.md)** — Install, prerequisites, quickstart
+- **[Providers and Models](docs/providers.md)** — Provider aliases, OpenCode Free/Zen/Go, model tiers
+- **[Core API](docs/core-api.md)** — Agent, sessions, events, results
+- **[Pipeline Functions](docs/pipelines.md)** — fan_out, delegate, retry_until, map_concurrent
+- **[Model Cascade](docs/cascade.md)** — Fallback system, profiles, tiers, CLI runner
+- **[MCP and Approval Modes](docs/mcp-approval.md)** — MCP servers, approval modes, budget caps
+- **[Auth and Quota](docs/auth-quota.md)** — check_quota, rate limits, session management
+- **[Provider Internals](docs/provider-internals.md)** — Provider protocol, classes, command building, event parsing
+- **[Advanced Usage](docs/advanced.md)** — Custom executors, error handling, framework integration
+- **[Feature Matrix](docs/feature-matrix.md)** — Per-provider feature comparison
+- **[API Reference](docs/api-reference.md)** — Full import list, defaults, dataclass fields
