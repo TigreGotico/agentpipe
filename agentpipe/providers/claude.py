@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from .._types import (
     AgentEvent,
+    ApprovalMode,
+    HttpMcpServer,
+    McpServerConfig,
+    StdioMcpServer,
     ThinkingEvent,
     ToolCallEvent,
     ToolResultEvent,
@@ -112,9 +118,28 @@ def _parse_claude_line(line: str) -> _ClaudeParsedEvent | None:
     return None
 
 
+_APPROVAL_MODE_MAP: dict[ApprovalMode, str] = {
+    ApprovalMode.DEFAULT: "default",
+    ApprovalMode.AUTO_EDIT: "acceptEdits",
+    ApprovalMode.YOLO: "bypassPermissions",
+    ApprovalMode.PLAN: "plan",
+    ApprovalMode.BYPASS: "bypassPermissions",
+}
+
+
 class ClaudeProvider:
-    def __init__(self, model: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str | None = None,
+        *,
+        mcp_servers: list[McpServerConfig] | None = None,
+        approval_mode: ApprovalMode | None = None,
+        max_budget_usd: float | None = None,
+    ) -> None:
         self._model = model
+        self._mcp_servers = mcp_servers or []
+        self._approval_mode = approval_mode
+        self._max_budget_usd = max_budget_usd
         self._tool_map: dict[str, str] = {}
         self._tool_start_times: dict[str, float] = {}
 
@@ -126,6 +151,21 @@ class ClaudeProvider:
     def model(self) -> str | None:
         return self._model
 
+    def _build_mcp_config_json(self) -> str:
+        servers: dict[str, dict[str, Any]] = {}
+        for server in self._mcp_servers:
+            if isinstance(server, HttpMcpServer):
+                entry: dict[str, Any] = {"type": "sse", "url": server.url}
+                if server.headers:
+                    entry["headers"] = dict(server.headers)
+                servers[server.name] = entry
+            else:
+                stdio_entry: dict[str, Any] = {"command": server.command, "args": server.args}
+                if isinstance(server, StdioMcpServer) and server.env:
+                    stdio_entry["env"] = server.env
+                servers[server.name] = stdio_entry
+        return json.dumps({"mcpServers": servers})
+
     def build_command(
         self,
         prompt: str,
@@ -133,27 +173,45 @@ class ClaudeProvider:
         session_id: str | None = None,
         model: str | None = None,
     ) -> list[str]:
+        skips_permissions = (
+            self._approval_mode is None
+            or self._approval_mode == ApprovalMode.BYPASS
+            or self._approval_mode == ApprovalMode.YOLO
+        )
+        permission_flag = "--dangerously-skip-permissions" if skips_permissions else "--permission-mode"
         cmd = [
             self.binary_name,
             "-p",
-            "--dangerously-skip-permissions",
-            "--output-format",
-            "stream-json",
-            "--verbose",
+            permission_flag,
         ]
+
+        if self._approval_mode is not None and self._approval_mode not in (ApprovalMode.BYPASS, ApprovalMode.YOLO):
+            cmd.pop()
+            cmd.extend(["--permission-mode", _APPROVAL_MODE_MAP[self._approval_mode]])
+
+        cmd.extend(["--output-format", "stream-json", "--verbose"])
+
         if session_id:
             cmd.extend(["--resume", session_id])
+
         cmd.append(prompt)
+
         effective_model = model or self._model
         if effective_model:
             cmd.extend(["--model", effective_model])
+
+        if self._mcp_servers:
+            cmd.extend(["--mcp-config", self._build_mcp_config_json(), "--strict-mcp-config"])
+
+        if self._max_budget_usd is not None:
+            cmd.extend(["--max-budget-usd", str(self._max_budget_usd)])
+
         return cmd
 
     def parse_event_line(self, line: str) -> list[AgentEvent]:
         stripped = line.strip()
         if not stripped:
             return []
-        import time
 
         parsed = _parse_claude_line(stripped)
         if parsed is None:
@@ -165,7 +223,7 @@ class ClaudeProvider:
                 events.extend(self._convert_internal_event(sub, time.monotonic()))
             return events
 
-        return self._convert_internal_event(parsed, time.monotonic)
+        return self._convert_internal_event(parsed, time.monotonic())
 
     def _convert_internal_event(self, parsed: _ClaudeParsedEvent, now: float) -> list[AgentEvent]:
         if isinstance(parsed, _TextEvent):
@@ -237,8 +295,6 @@ class ClaudeProvider:
         return "".join(text_parts).strip()
 
     def build_env(self) -> dict[str, str]:
-        import os
-
         env = dict(os.environ)
         env.setdefault("CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR", "1")
         return env

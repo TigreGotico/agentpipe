@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ._executor import AsyncSubprocessExecutor
-from ._types import CommandSpec, GenerationResult, SessionInfo, UsageEvent
+from ._types import CommandSpec, GenerationResult, SessionInfo, SessionUsage, UsageEvent
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -26,6 +26,7 @@ class AgentSession:
         self._timeout = timeout
         self._executor = executor or AsyncSubprocessExecutor()
         self._info = SessionInfo()
+        self._usage = SessionUsage()
 
     async def __aenter__(self) -> AgentSession:
         return self
@@ -36,6 +37,10 @@ class AgentSession:
     @property
     def session_id(self) -> str | None:
         return self._info.session_id
+
+    @property
+    def usage(self) -> SessionUsage:
+        return self._usage
 
     async def generate(self, prompt: str, *, cwd: str | None = None, timeout: int | None = None) -> str:
         result = await self.generate_full(prompt, cwd=cwd, timeout=timeout)
@@ -76,6 +81,8 @@ class AgentSession:
                         if sid:
                             session_id_collected = sid
                     for event in self._provider.parse_event_line(stripped):
+                        if isinstance(event, UsageEvent):
+                            self._usage.add(event)
                         yield event
 
         if self._info.session_id is None and session_id_collected:
@@ -126,6 +133,7 @@ class AgentSession:
                 events.append(event)
                 if isinstance(event, UsageEvent):
                     last_usage = event
+                    self._usage.add(event)
 
         return GenerationResult(
             text=text,
