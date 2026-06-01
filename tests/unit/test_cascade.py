@@ -3,21 +3,20 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from agentpipe._executor import AgentProcessError
+from agentpipe._session import AgentSession
+from agentpipe._types import GenerationResult, SessionUsage
 from agentpipe.cascade import (
     CASCADE_PROFILES,
+    MODEL_TIER_MAP,
     ErrorType,
     ModelTier,
-    MODEL_TIER_MAP,
     cascade,
     cascade_coding,
     cascade_fast_free,
     cascade_free_only,
     tier_summary,
 )
-from agentpipe._agent import Agent
-from agentpipe._executor import AgentProcessError
-from agentpipe._session import AgentSession
-from agentpipe._types import GenerationResult, SessionUsage
 
 
 def _make_result(text: str, cost_usd: float = 0.0) -> GenerationResult:
@@ -128,7 +127,7 @@ class TestCascadeFallback:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise asyncio.TimeoutError()
+                raise asyncio.TimeoutError
             return _make_result("success after timeout")
 
         with patch.object(AgentSession, "generate_full", mock_generate):
@@ -246,3 +245,100 @@ class TestTierSummary:
     def test_free_tier_has_models(self):
         summary = tier_summary()
         assert len(summary[ModelTier.FREE]) > 0
+
+
+class TestResolveProvider:
+    def test_free_model_maps_to_opencode_free(self):
+        from agentpipe.cascade import _resolve_provider
+
+        assert _resolve_provider("opencode/big-pickle") == "opencode-free"
+        assert _resolve_provider("opencode/deepseek-v4-flash-free") == "opencode-free"
+        assert _resolve_provider("opencode/gemini-3-flash") == "opencode-free"
+
+    def test_zen_model_maps_to_opencode_zen(self):
+        from agentpipe.cascade import _resolve_provider
+
+        assert _resolve_provider("opencode/kimi-k2.5") == "opencode-zen"
+        assert _resolve_provider("opencode/kimi-k2.6") == "opencode-zen"
+        assert _resolve_provider("opencode/glm-5.1") == "opencode-zen"
+
+    def test_go_model_maps_to_opencode_go(self):
+        from agentpipe.cascade import _resolve_provider
+
+        assert _resolve_provider("opencode-go/deepseek-v4-flash") == "opencode-go"
+        assert _resolve_provider("opencode-go/glm-5.1") == "opencode-go"
+
+    def test_gemini_models_map_to_gemini(self):
+        from agentpipe.cascade import _resolve_provider
+
+        assert _resolve_provider("gemini-2.5-flash") == "gemini"
+        assert _resolve_provider("gemini-2.5-pro") == "gemini"
+
+    def test_unknown_model_raises(self):
+        from agentpipe.cascade import _resolve_provider
+
+        with pytest.raises(ValueError, match="Cannot determine provider"):
+            _resolve_provider("unknown-model")
+
+
+class TestProviderClasses:
+    def test_opencode_free_provider(self):
+        from agentpipe.providers.opencode import OpencodeFreeProvider
+
+        p = OpencodeFreeProvider()
+        assert p.model == "opencode/big-pickle"
+        assert p.plan == "free"
+        assert p.binary_name == "opencode"
+
+    def test_opencode_zen_provider(self):
+        from agentpipe.providers.opencode import OpencodeZenProvider
+
+        p = OpencodeZenProvider()
+        assert p.model == "opencode/gemini-3-flash"
+        assert p.plan == "zen"
+        assert p.binary_name == "opencode"
+
+    def test_opencode_go_provider(self):
+        from agentpipe.providers.opencode import OpencodeGoProvider
+
+        p = OpencodeGoProvider()
+        assert p.model == "opencode-go/deepseek-v4-flash"
+        assert p.plan == "go"
+        assert p.binary_name == "opencode"
+
+    def test_opencode_provider_backward_compat(self):
+        from agentpipe.providers.opencode import OpencodeProvider
+
+        p = OpencodeProvider()
+        assert p.model == "opencode/gemini-3-flash"
+        assert p.plan == "zen"
+
+    def test_claude_sonnet_provider(self):
+        from agentpipe.providers.claude import ClaudeSonnetProvider
+
+        p = ClaudeSonnetProvider()
+        assert p.model == "sonnet"
+
+    def test_claude_haiku_provider(self):
+        from agentpipe.providers.claude import ClaudeHaikuProvider
+
+        p = ClaudeHaikuProvider()
+        assert p.model == "haiku"
+
+    def test_claude_opus_provider(self):
+        from agentpipe.providers.claude import ClaudeOpusProvider
+
+        p = ClaudeOpusProvider()
+        assert p.model == "opus"
+
+    def test_gemini_flash_provider(self):
+        from agentpipe.providers.gemini import GeminiFlashProvider
+
+        p = GeminiFlashProvider()
+        assert p.model == "gemini-2.5-flash"
+
+    def test_gemini_pro_provider(self):
+        from agentpipe.providers.gemini import GeminiProProvider
+
+        p = GeminiProProvider()
+        assert p.model == "gemini-2.5-pro"

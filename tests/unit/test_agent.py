@@ -4,7 +4,13 @@ import pytest
 
 from agentpipe._agent import DEFAULT_CWD, DEFAULT_MODELS, Agent
 from agentpipe._session import AgentSession
-from agentpipe.providers.claude import ClaudeProvider
+from agentpipe.providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
+from agentpipe.providers.gemini import GeminiFlashProvider, GeminiProProvider
+from agentpipe.providers.opencode import (
+    OpencodeFreeProvider,
+    OpencodeGoProvider,
+    OpencodeZenProvider,
+)
 
 
 class TestAgentConstruction:
@@ -24,6 +30,54 @@ class TestAgentConstruction:
         assert agent.provider == "opencode"
         assert agent.model == "opencode/gemini-3-flash"
 
+    def test_create_opencode_free_agent(self):
+        agent = Agent("opencode-free")
+        assert agent.provider == "opencode-free"
+        assert agent.model == "opencode/big-pickle"
+        assert isinstance(agent._provider_instance, OpencodeFreeProvider)
+
+    def test_create_opencode_zen_agent(self):
+        agent = Agent("opencode-zen")
+        assert agent.provider == "opencode-zen"
+        assert agent.model == "opencode/gemini-3-flash"
+        assert isinstance(agent._provider_instance, OpencodeZenProvider)
+
+    def test_create_opencode_go_agent(self):
+        agent = Agent("opencode-go")
+        assert agent.provider == "opencode-go"
+        assert agent.model == "opencode-go/deepseek-v4-flash"
+        assert isinstance(agent._provider_instance, OpencodeGoProvider)
+
+    def test_create_claude_sonnet_agent(self):
+        agent = Agent("claude-sonnet")
+        assert agent.provider == "claude-sonnet"
+        assert agent.model == "sonnet"
+        assert isinstance(agent._provider_instance, ClaudeSonnetProvider)
+
+    def test_create_claude_haiku_agent(self):
+        agent = Agent("claude-haiku")
+        assert agent.provider == "claude-haiku"
+        assert agent.model == "haiku"
+        assert isinstance(agent._provider_instance, ClaudeHaikuProvider)
+
+    def test_create_claude_opus_agent(self):
+        agent = Agent("claude-opus")
+        assert agent.provider == "claude-opus"
+        assert agent.model == "opus"
+        assert isinstance(agent._provider_instance, ClaudeOpusProvider)
+
+    def test_create_gemini_flash_agent(self):
+        agent = Agent("gemini-flash")
+        assert agent.provider == "gemini-flash"
+        assert agent.model == "gemini-2.5-flash"
+        assert isinstance(agent._provider_instance, GeminiFlashProvider)
+
+    def test_create_gemini_pro_agent(self):
+        agent = Agent("gemini-pro")
+        assert agent.provider == "gemini-pro"
+        assert agent.model == "gemini-2.5-pro"
+        assert isinstance(agent._provider_instance, GeminiProProvider)
+
     def test_create_agent_custom_model(self):
         agent = Agent("claude", model="haiku")
         assert agent.model == "haiku"
@@ -40,6 +94,9 @@ class TestAgentConstruction:
         assert "claude" in DEFAULT_MODELS
         assert "gemini" in DEFAULT_MODELS
         assert "opencode" in DEFAULT_MODELS
+        assert "opencode-free" in DEFAULT_MODELS
+        assert "opencode-zen" in DEFAULT_MODELS
+        assert "opencode-go" in DEFAULT_MODELS
 
     def test_default_cwd(self):
         assert DEFAULT_CWD == "/tmp"

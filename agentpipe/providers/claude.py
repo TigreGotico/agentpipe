@@ -298,3 +298,27 @@ class ClaudeProvider:
         env = dict(os.environ)
         env.setdefault("CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR", "1")
         return env
+
+
+class ClaudeSonnetProvider(ClaudeProvider):
+    """Claude Sonnet — flagship coding/following model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("model", "sonnet")
+        super().__init__(**kwargs)
+
+
+class ClaudeHaikuProvider(ClaudeProvider):
+    """Claude Haiku — fast, cheap model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("model", "haiku")
+        super().__init__(**kwargs)
+
+
+class ClaudeOpusProvider(ClaudeProvider):
+    """Claude Opus — premium reasoning model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("model", "opus")
+        super().__init__(**kwargs)

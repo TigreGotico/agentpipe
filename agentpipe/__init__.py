@@ -1,17 +1,4 @@
 from ._agent import DEFAULT_CWD, DEFAULT_MODELS, Agent
-from .cascade import (
-    CASCADE_PROFILES,
-    CascadeAttempt,
-    CascadeResult,
-    ErrorType,
-    ModelTier,
-    MODEL_TIER_MAP,
-    cascade,
-    cascade_coding,
-    cascade_fast_free,
-    cascade_free_only,
-    tier_summary,
-)
 from ._executor import AgentProcessError, AsyncSubprocessExecutor
 from ._pipeline import delegate, fan_out, map_concurrent, retry_until
 from ._quota import QuotaStatus, check_quota, parse_rate_limit_error
@@ -35,6 +22,27 @@ from ._types import (
     ToolResultEvent,
     UsageEvent,
 )
+from .cascade import (
+    CASCADE_PROFILES,
+    MODEL_TIER_MAP,
+    CascadeAttempt,
+    CascadeResult,
+    ErrorType,
+    ModelTier,
+    cascade,
+    cascade_coding,
+    cascade_fast_free,
+    cascade_free_only,
+    tier_summary,
+)
+from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
+from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
+from .providers.opencode import (
+    OpencodeFreeProvider,
+    OpencodeGoProvider,
+    OpencodeProvider,
+    OpencodeZenProvider,
+)
 
 __all__ = [
     "Agent",
@@ -43,6 +51,10 @@ __all__ = [
     "AgentEvent",
     "ApprovalMode",
     "AuthStatus",
+    "ClaudeHaikuProvider",
+    "ClaudeOpusProvider",
+    "ClaudeProvider",
+    "ClaudeSonnetProvider",
     "CommandSpec",
     "DEFAULT_CWD",
     "DEFAULT_MODELS",
@@ -51,11 +63,18 @@ __all__ = [
     "CascadeResult",
     "ErrorType",
     "GenerationResult",
+    "GeminiFlashProvider",
+    "GeminiProProvider",
+    "GeminiProvider",
     "HttpMcpServer",
     "McpServerConfig",
     "ModelInfo",
     "ModelTier",
     "MODEL_TIER_MAP",
+    "OpencodeFreeProvider",
+    "OpencodeGoProvider",
+    "OpencodeProvider",
+    "OpencodeZenProvider",
     "Provider",
     "QuotaStatus",
     "SessionEntry",

@@ -60,7 +60,7 @@ async def check_quota(
         return await _claude_quota_status(prov, executor)
     if effective_provider == "gemini":
         return await _gemini_quota_status(prov, executor)
-    if effective_provider == "opencode":
+    if effective_provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
         return await _opencode_quota_status(prov, executor)
 
     return QuotaStatus(provider=effective_provider)
@@ -204,7 +204,7 @@ def parse_rate_limit_error(provider: str, error: AgentProcessError) -> dict:
             info["rate_limited"] = True
             return info
 
-    if provider == "opencode" and _RATE_LIMIT_PATTERN.search(error.stderr or ""):
+    if (provider == "opencode" or provider.startswith("opencode-")) and _RATE_LIMIT_PATTERN.search(error.stderr or ""):
         info["rate_limited"] = True
         return info
 

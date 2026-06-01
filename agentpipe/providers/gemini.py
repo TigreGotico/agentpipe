@@ -165,3 +165,17 @@ class GeminiProvider:
         env = dict(os.environ)
         env.setdefault("GEMINI_CLI_TRUST_WORKSPACE", "true")
         return env
+
+
+class GeminiFlashProvider(GeminiProvider):
+    """Gemini 2.5 Flash — fast, free-tier model."""
+
+    def __init__(self, model: str | None = None) -> None:
+        super().__init__(model=model or "gemini-2.5-flash")
+
+
+class GeminiProProvider(GeminiProvider):
+    """Gemini 2.5 Pro — premium reasoning model."""
+
+    def __init__(self, model: str | None = None) -> None:
+        super().__init__(model=model or "gemini-2.5-pro")

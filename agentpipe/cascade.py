@@ -167,14 +167,27 @@ MODEL_PROVIDER_MAP: dict[str, str] = {
     "gemini-2.5-pro": "gemini",
 }
 
+_FREE_MODELS: frozenset[str] = frozenset(
+    {
+        "opencode/big-pickle",
+        "opencode/gemini-3-flash",
+        "opencode/deepseek-v4-flash-free",
+        "opencode/mimo-v2.5-free",
+        "opencode/nemotron-3-super-free",
+        "opencode/minimax-m3-free",
+    }
+)
+
 
 def _resolve_provider(model: str) -> str:
     if model in MODEL_PROVIDER_MAP:
         return MODEL_PROVIDER_MAP[model]
     if model.startswith("opencode-go/"):
-        return "opencode"
+        return "opencode-go"
+    if model in _FREE_MODELS:
+        return "opencode-free"
     if model.startswith("opencode/"):
-        return "opencode"
+        return "opencode-zen"
     raise ValueError(f"Cannot determine provider for model '{model}'")
 
 

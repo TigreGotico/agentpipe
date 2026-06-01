@@ -13,9 +13,13 @@ from ._types import (
     ModelInfo,
     SessionEntry,
 )
-from .providers.claude import ClaudeProvider
-from .providers.gemini import GeminiProvider
-from .providers.opencode import OpencodeProvider
+from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
+from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
+from .providers.opencode import (
+    OpencodeFreeProvider,
+    OpencodeGoProvider,
+    OpencodeZenProvider,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -26,14 +30,30 @@ DEFAULT_CWD = "/tmp"
 
 DEFAULT_MODELS: dict[str, str] = {
     "claude": "sonnet",
+    "claude-sonnet": "sonnet",
+    "claude-haiku": "haiku",
+    "claude-opus": "opus",
     "gemini": "gemini-2.5-flash",
+    "gemini-flash": "gemini-2.5-flash",
+    "gemini-pro": "gemini-2.5-pro",
     "opencode": "opencode/gemini-3-flash",
+    "opencode-free": "opencode/big-pickle",
+    "opencode-zen": "opencode/gemini-3-flash",
+    "opencode-go": "opencode-go/deepseek-v4-flash",
 }
 
 _PROVIDER_MAP: dict[str, type] = {
     "claude": ClaudeProvider,
+    "claude-sonnet": ClaudeSonnetProvider,
+    "claude-haiku": ClaudeHaikuProvider,
+    "claude-opus": ClaudeOpusProvider,
     "gemini": GeminiProvider,
-    "opencode": OpencodeProvider,
+    "gemini-flash": GeminiFlashProvider,
+    "gemini-pro": GeminiProProvider,
+    "opencode": OpencodeZenProvider,
+    "opencode-free": OpencodeFreeProvider,
+    "opencode-zen": OpencodeZenProvider,
+    "opencode-go": OpencodeGoProvider,
 }
 
 
@@ -125,7 +145,7 @@ class Agent:
             return await self._claude_auth_status()
         if self.provider == "gemini":
             return await self._gemini_auth_status()
-        if self.provider == "opencode":
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_auth_status()
         return AuthStatus(authenticated=False, provider=self.provider)
 
@@ -133,17 +153,17 @@ class Agent:
         effective_cwd = cwd or self.cwd
         if self.provider == "gemini":
             return await self._gemini_list_sessions(effective_cwd)
-        if self.provider == "opencode":
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_list_sessions(effective_cwd)
         raise NotImplementedError(f"list_sessions not supported for {self.provider}")
 
     async def list_models(self) -> list[ModelInfo]:
-        if self.provider == "opencode":
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_list_models()
         raise NotImplementedError(f"list_models not supported for {self.provider}")
 
     async def stats(self, *, days: int | None = None, cwd: str | None = None) -> dict:
-        if self.provider == "opencode":
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_stats(days=days, cwd=cwd or self.cwd)
         raise NotImplementedError(f"stats not supported for {self.provider}")
 

@@ -12,7 +12,9 @@ from .._types import (
     UsageEvent,
 )
 
-OPENCODE_DEFAULT_MODEL = "google-vertex/gemini-3-pro-preview"
+OPENCODE_FREE_DEFAULT_MODEL = "opencode/big-pickle"
+OPENCODE_ZEN_DEFAULT_MODEL = "opencode/gemini-3-flash"
+OPENCODE_GO_DEFAULT_MODEL = "opencode-go/deepseek-v4-flash"
 
 
 @dataclass
@@ -59,7 +61,7 @@ def _parse_opencode_line(
     if msg_type == "text":
         return _OpencodeTextEvent(text=part.get("text", ""))
     if msg_type == "tool_use":
-        state = part.get("state", {})
+        state = data.get("state", {})
         return _OpencodeToolUseEvent(
             tool_name=part.get("tool", ""),
             input_data=state.get("input"),
@@ -79,8 +81,10 @@ def _parse_opencode_line(
 
 
 class OpencodeProvider:
+    """Base / backward-compat opencode provider (alias for Zen plan)."""
+
     def __init__(self, model: str | None = None) -> None:
-        self._model = model or OPENCODE_DEFAULT_MODEL
+        self._model = model or OPENCODE_ZEN_DEFAULT_MODEL
 
     @property
     def binary_name(self) -> str:
@@ -89,6 +93,10 @@ class OpencodeProvider:
     @property
     def model(self) -> str | None:
         return self._model
+
+    @property
+    def plan(self) -> str:
+        return "zen"
 
     def build_command(
         self,
@@ -192,3 +200,40 @@ class OpencodeProvider:
         import os
 
         return dict(os.environ)
+
+
+class OpencodeFreeProvider(OpencodeProvider):
+    """Opencode Free plan — free-tier models via the Zen endpoint (opencode/ prefix)."""
+
+    def __init__(self, model: str | None = None) -> None:
+        self._model = model or OPENCODE_FREE_DEFAULT_MODEL
+
+    @property
+    def plan(self) -> str:
+        return "free"
+
+
+class OpencodeZenProvider(OpencodeProvider):
+    """Opencode Zen plan — pay-as-you-go via the Zen endpoint (opencode/ prefix)."""
+
+    def __init__(self, model: str | None = None) -> None:
+        self._model = model or OPENCODE_ZEN_DEFAULT_MODEL
+
+    @property
+    def plan(self) -> str:
+        return "zen"
+
+
+class OpencodeGoProvider(OpencodeProvider):
+    """Opencode Go plan — subscription via the Go endpoint (opencode-go/ prefix).
+
+    Same binary, but models use the opencode-go/ prefix which routes to
+    https://opencode.ai/zen/go/v1 with its own rate limits and flat billing.
+    """
+
+    def __init__(self, model: str | None = None) -> None:
+        self._model = model or OPENCODE_GO_DEFAULT_MODEL
+
+    @property
+    def plan(self) -> str:
+        return "go"
