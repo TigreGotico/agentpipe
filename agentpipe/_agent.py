@@ -611,7 +611,7 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="claude"))
+                    servers.append(McpServerInfo(name=line))
             return servers
         except AgentProcessError as e:
             logger.warning("Claude MCP list failed: %s", e)
@@ -672,7 +672,7 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="opencode"))
+                    servers.append(McpServerInfo(name=line))
             return servers
         except AgentProcessError as e:
             logger.warning("OpenCode MCP list failed: %s", e)
@@ -691,7 +691,7 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line:
-                    extensions.append(ExtensionInfo(name=line, provider="gemini"))
+                    extensions.append(ExtensionInfo(name=line))
             return extensions
         except AgentProcessError as e:
             logger.warning("Gemini list extensions failed: %s", e)
