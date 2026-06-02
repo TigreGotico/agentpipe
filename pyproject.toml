@@ -1,7 +1,7 @@
 [project]
 name = "agentpipe"
 version = "0.1.0"
-description = "Async Python wrapper for coding agent CLIs (Claude Code, Gemini, Opencode)"
+description = "Async Python wrapper for coding agent CLIs (Aider, Claude Code, Gemini, Kilo Code, OpenCode, QoderCLI, Vibe)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []

@@ -20,9 +20,12 @@ The provider CLIs must be installed and authenticated separately:
 
 | CLI | Install | Auth |
 |-----|---------|------|
+| `aider` | `pip install aider-chat` | OpenRouter OAuth (auto on first run) |
 | `claude` | `npm install -g @anthropics/claude-code` | `claude auth login` |
 | `gemini` | `npm install -g @anthropic-ai/gemini-cli` | Browser-based OAuth |
+| `kilo` | `npm install -g @kilocode/cli` | `kilo auth login` (free tier: no CC) |
 | `opencode` | `npm install -g opencode` | `opencode auth` |
+| `vibe` | `pip install mistral-vibe` | `vibe --setup` (Mistral API key) |
 
 ## 30-Second Quickstart
 
@@ -74,6 +77,44 @@ async with agent.session(cwd=".") as sess:
     print(sess.usage.turn_count)          # number of generate() calls
 ```
 
+## All Provider Features
+
+agentpipe exposes the full CLI feature set across all providers:
+
+```python
+from agentpipe import Agent, ApprovalMode, EffortLevel
+
+# System prompt (Claude, Qoder)
+agent = Agent("claude", system_prompt="You are a code reviewer")
+
+# Approval modes (Claude, Gemini, OpenCode, Kilo, Vibe)
+agent = Agent("gemini", approval_mode=ApprovalMode.YOLO)
+
+# Effort level (Claude, OpenCode/Kilo as "variant", Aider as "reasoning-effort")
+agent = Agent("claude", effort=EffortLevel.HIGH)
+
+# Sandbox mode (Claude, Gemini, OpenCode, Kilo)
+agent = Agent("opencode", sandbox=True)
+
+# File attachments (Aider, Claude, OpenCode, Kilo)
+agent = Agent("claude", files=["README.md", "src/main.py"])
+
+# Continue last session (Claude, OpenCode, Kilo)
+agent = Agent("claude", continue_last=True)
+
+# Agent selection (Claude, OpenCode, Kilo, Vibe)
+agent = Agent("opencode", agent_name="reviewer")
+
+# Extensions (Gemini)
+agent = Agent("gemini", extensions=["search", "code"])
+
+# Include additional directories (all providers)
+agent = Agent("claude", include_dirs=["/src", "/lib"])
+
+# Show thinking blocks (Kilo)
+agent = Agent("kilo", show_thinking=True)
+```
+
 ## Model Cascade (Failover)
 
 ```python
@@ -92,5 +133,8 @@ result = await cascade("Quick question", profile="free-only")
 ## Next Steps
 
 - **[Providers and Models](providers.md)** — See all provider aliases and model options
-- **[Core API](core-api.md)** — Deep dive into Agent, sessions, events
+- **[Core API](core-api.md)** — Deep dive into Agent, sessions, events, results
 - **[Model Cascade](cascade.md)** — Full cascade system documentation
+- **[MCP and Approval Modes](mcp-approval.md)** — MCP servers, approval modes, budget caps
+- **[Auth and Quota](auth-quota.md)** — Auth, quota, session management, MCP management
+- **[Feature Matrix](feature-matrix.md)** — Per-provider feature comparison

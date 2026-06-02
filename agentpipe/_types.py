@@ -18,6 +18,14 @@ class ApprovalMode(str, Enum):
     BYPASS = "bypass"
 
 
+class EffortLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "xhigh"
+    MAX = "max"
+
+
 @dataclass(frozen=True)
 class ThinkingEvent:
     text: str
@@ -136,3 +144,31 @@ class ModelInfo:
     context_window: int | None = None
     cost_per_million_input: float | None = None
     cost_per_million_output: float | None = None
+
+
+@dataclass(frozen=True)
+class McpServerInfo:
+    name: str
+    type: str | None = None
+    url: str | None = None
+    command: str | None = None
+    args: list[str] | None = None
+    env: dict[str, str] | None = None
+    headers: dict[str, str] | None = None
+    scope: str | None = None
+    enabled: bool | None = None
+
+
+@dataclass(frozen=True)
+class ExtensionInfo:
+    name: str
+    version: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
+
+
+@dataclass(frozen=True)
+class SessionExport:
+    session_id: str
+    data: str
+    format: str = "json"

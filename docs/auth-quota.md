@@ -68,6 +68,34 @@ Recognizes rate-limit patterns for:
 - **OpenCode** — `"rate limit"`, `"quota exceeded"`, `"capacity"`, `"too many requests"` in stderr
 - **Claude** — `"rate limit"` or `"overloaded"` in stderr
 
+## Auth Methods
+
+### Login and Logout
+
+```python
+from agentpipe import Agent
+
+agent = Agent("claude")
+
+# Check auth status
+status = await agent.auth_status()
+print(status.authenticated, status.email)
+
+# Login (Claude, OpenCode)
+status = await agent.auth_login()
+# For Claude with method:
+status = await agent.auth_login(method="api_key")
+
+# Logout (Claude, OpenCode)
+status = await agent.auth_logout()
+```
+
+| Provider | `auth_login()` | `auth_logout()` | `auth_status()` |
+|----------|---------------|----------------|-----------------|
+| Claude | `claude auth login` | `claude auth logout` | `claude auth status --json` |
+| Gemini | Not supported | Not supported | `gemini --version` check |
+| OpenCode | `opencode providers login` | `opencode providers logout` | `opencode providers list` |
+
 ## Session Management
 
 ### List Sessions
@@ -80,6 +108,36 @@ for s in sessions:
 ```
 
 Supported for Gemini and OpenCode (all variants). Claude does not support session listing.
+
+### Delete Session
+
+```python
+agent = Agent("opencode")
+deleted = await agent.delete_session("session-id")
+```
+
+OpenCode only. Returns `True` if successful.
+
+### Export Session
+
+```python
+agent = Agent("opencode")
+export = await agent.export_session("session-id")
+print(export.session_id)
+print(export.data)    # JSON string
+print(export.format)  # "json"
+```
+
+OpenCode only. Returns a `SessionExport` with the session data as JSON.
+
+### Import Session
+
+```python
+agent = Agent("opencode")
+new_id = await agent.import_session(json_data)
+```
+
+OpenCode only. Imports session data from a JSON string. Returns the new session ID or `None` on failure.
 
 ### List Models
 
@@ -101,3 +159,70 @@ print(stats)  # {"raw": "..."}
 ```
 
 OpenCode only. Passes `--days` if specified, returns raw output.
+
+## MCP Management
+
+### Add MCP Server
+
+```python
+from agentpipe import Agent
+
+agent = Agent("claude")
+
+# HTTP/SSE server (Claude, OpenCode)
+await agent.mcp_add("docs", url="http://localhost:9000/sse")
+
+# Stdio server (Claude, OpenCode)
+await agent.mcp_add("github", command="npx", args=["-y", "@mcp/server-github"])
+
+# With env vars (OpenCode)
+await agent.mcp_add("github", command="npx", args=["-y", "@mcp/server-github"],
+                     env={"GITHUB_TOKEN": "ghp_x"})
+
+# With headers and scope (Claude only)
+await agent.mcp_add("api", url="http://localhost:8080/sse",
+                    headers={"Authorization": "Bearer tok"}, scope="project")
+```
+
+| Provider | `mcp_add(url=)` | `mcp_add(command=)` | `headers` | `env` | `scope` |
+|----------|----------------|--------------------|-----------|-------|---------|
+| Claude | `claude mcp add -t sse --url` | `claude mcp add -t stdio` | Yes | Yes | Yes |
+| OpenCode | `opencode mcp add -t sse --url` | `opencode mcp add -t stdio` | No | Yes | No |
+
+### Remove MCP Server
+
+```python
+await agent.mcp_remove("github")
+
+# With scope (Claude only)
+await agent.mcp_remove("github", scope="project")
+```
+
+### List MCP Servers
+
+```python
+servers = await agent.mcp_list()
+for s in servers:
+    print(s.name, s.type, s.url, s.command)
+```
+
+## Extensions (Gemini)
+
+```python
+agent = Agent("gemini")
+extensions = await agent.list_extensions()
+for ext in extensions:
+    print(ext.name, ext.version, ext.enabled)
+```
+
+Gemini only.
+
+## Doctor (Claude)
+
+```python
+agent = Agent("claude")
+result = await agent.doctor()
+print(result)  # {"raw": "..."}
+```
+
+Claude only.

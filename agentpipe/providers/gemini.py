@@ -6,12 +6,21 @@ from typing import Any
 
 from .._types import (
     AgentEvent,
+    ApprovalMode,
     ThinkingEvent,
     ToolCallEvent,
     ToolResultEvent,
 )
 
 _GeminiParsedEvent = "_GeminiInitEvent | _GeminiMessageEvent | _GeminiToolUseEvent | _GeminiToolResultEvent | None"
+
+_GEMINI_APPROVAL_MAP: dict[ApprovalMode, str] = {
+    ApprovalMode.DEFAULT: "default",
+    ApprovalMode.AUTO_EDIT: "auto_edit",
+    ApprovalMode.YOLO: "yolo",
+    ApprovalMode.PLAN: "plan",
+    ApprovalMode.BYPASS: "yolo",
+}
 
 
 @dataclass
@@ -64,8 +73,38 @@ def _parse_gemini_line(
 
 
 class GeminiProvider:
-    def __init__(self, model: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str | None = None,
+        *,
+        sandbox: bool = False,
+        include_dirs: list[str] | None = None,
+        approval_mode: ApprovalMode | None = None,
+        allowed_tools: list[str] | None = None,
+        raw_output: bool = False,
+        extensions: list[str] | None = None,
+        # Accepted but not used by Gemini CLI — forwarded by Agent
+        mcp_servers: list | None = None,
+        max_budget_usd: float | None = None,
+        system_prompt: str | None = None,
+        append_system_prompt: str | None = None,
+        disallowed_tools: list[str] | None = None,
+        effort: str | None = None,
+        fallback_model: str | None = None,
+        json_schema: dict | None = None,
+        agent_name: str | None = None,
+        session_name: str | None = None,
+        continue_last: bool = False,
+        fork_session: bool = False,
+        files: list[str] | None = None,
+    ) -> None:
         self._model = model
+        self._sandbox = sandbox
+        self._include_dirs = include_dirs
+        self._approval_mode = approval_mode
+        self._allowed_tools = allowed_tools
+        self._raw_output = raw_output
+        self._extensions = extensions
         self._tool_map: dict[str, str] = {}
         self._tool_start_times: dict[str, float] = {}
         self._assistant_turns: int = 0
@@ -85,11 +124,31 @@ class GeminiProvider:
         session_id: str | None = None,
         model: str | None = None,
     ) -> list[str]:
-        cmd = [self.binary_name, "-y"]
+        cmd = [self.binary_name]
+        if self._approval_mode == ApprovalMode.YOLO or self._approval_mode == ApprovalMode.BYPASS:
+            cmd.append("--yolo")
+        elif self._approval_mode is not None and self._approval_mode != ApprovalMode.DEFAULT:
+            cmd.extend(["--approval-mode", _GEMINI_APPROVAL_MAP[self._approval_mode]])
+        elif self._approval_mode == ApprovalMode.DEFAULT:
+            cmd.extend(["--approval-mode", "default"])
         effective_model = model or self._model
         if effective_model:
             cmd.extend(["--model", effective_model])
-        cmd.extend(["-o", "stream-json"])
+        if self._sandbox:
+            cmd.append("--sandbox")
+        if self._include_dirs:
+            for d in self._include_dirs:
+                cmd.extend(["--include-directories", d])
+        if self._allowed_tools:
+            for tool in self._allowed_tools:
+                cmd.extend(["--allowed-tools", tool])
+        if self._extensions:
+            for ext in self._extensions:
+                cmd.extend(["--extensions", ext])
+        if self._raw_output:
+            cmd.extend(["--output-format", "json", "--raw-output"])
+        else:
+            cmd.extend(["--output-format", "stream-json"])
         cmd.extend(["-p", prompt])
         if session_id:
             cmd.extend(["--resume", session_id])
@@ -170,12 +229,12 @@ class GeminiProvider:
 class GeminiFlashProvider(GeminiProvider):
     """Gemini 2.5 Flash — fast, free-tier model."""
 
-    def __init__(self, model: str | None = None) -> None:
-        super().__init__(model=model or "gemini-2.5-flash")
+    def __init__(self, model: str | None = None, **kwargs: Any) -> None:
+        super().__init__(model=model or "gemini-2.5-flash", **kwargs)
 
 
 class GeminiProProvider(GeminiProvider):
     """Gemini 2.5 Pro — premium reasoning model."""
 
-    def __init__(self, model: str | None = None) -> None:
-        super().__init__(model=model or "gemini-2.5-pro")
+    def __init__(self, model: str | None = None, **kwargs: Any) -> None:
+        super().__init__(model=model or "gemini-2.5-pro", **kwargs)

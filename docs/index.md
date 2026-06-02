@@ -1,17 +1,17 @@
 # agentpipe
 
-Async Python wrapper for coding agent CLIs (Claude Code, Gemini, Opencode). Zero dependencies. Python 3.10+.
+Async Python wrapper for coding agent CLIs (Aider, Claude Code, Gemini, Kilo Code, OpenCode, QoderCLI, Vibe). Zero dependencies. Python 3.10+.
 
 **Pages:**
 
-- **[Getting Started](getting-started.md)** — Install, prerequisites, 30-second quickstart
+- **[Getting Started](getting-started.md)** — Install, prerequisites, 30-second quickstart, all features
 - **[Providers and Models](providers.md)** — Provider aliases, OpenCode Free/Zen/Go, model tier map
-- **[Core API](core-api.md)** — Agent, generation methods, sessions, events, results
+- **[Core API](core-api.md)** — Agent, generation methods, sessions, events, results, new features
 - **[Pipeline Functions](pipelines.md)** — fan_out, delegate, retry_until, map_concurrent
 - **[Model Cascade](cascade.md)** — Fallback system, profiles, tiers, CLI runner
-- **[MCP and Approval Modes](mcp-approval.md)** — MCP servers, approval modes, budget caps
-- **[Auth and Quota](auth-quota.md)** — check_quota, rate limits, session management
+- **[MCP and Approval Modes](mcp-approval.md)** — MCP servers (inline + programmatic), approval modes, budget caps
+- **[Auth and Quota](auth-quota.md)** — Auth login/logout, quota, rate limits, session management, MCP management, extensions, doctor
 - **[Provider Internals](provider-internals.md)** — Provider protocol, classes, command building, event parsing
 - **[Advanced Usage](advanced.md)** — Custom executors, error handling, framework integration
-- **[Feature Matrix](feature-matrix.md)** — Per-provider feature comparison
-- **[API Reference](api-reference.md)** — Full import list, defaults, dataclass fields
+- **[Feature Matrix](feature-matrix.md)** — Full per-provider feature comparison, effort mapping, approval modes
+- **[API Reference](api-reference.md)** — Full import list, defaults, dataclass fields, method signatures

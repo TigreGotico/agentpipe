@@ -3,23 +3,44 @@
 ## Agent Dataclass
 
 ```python
-from agentpipe import Agent, ApprovalMode, HttpMcpServer
+from agentpipe import Agent, ApprovalMode, EffortLevel, HttpMcpServer
 
 agent = Agent(
     provider="claude-sonnet",      # str — provider name or alias
     model=None,                    # str | None — override (filled from DEFAULT_MODELS if None)
     cwd="/tmp",                    # str — working directory for subprocesses
     timeout=300,                   # int — seconds before killing the subprocess
-    mcp_servers=[],               # list[McpServerConfig] — Claude MCP servers
-    approval_mode=None,            # ApprovalMode | None — Claude permission mode
-    max_budget_usd=None,          # float | None — Claude budget cap
+    mcp_servers=[],               # list[McpServerConfig] — MCP servers (Claude, OpenCode)
+    approval_mode=None,            # ApprovalMode | None — approval mode (all providers)
+    max_budget_usd=None,           # float | None — budget cap (Claude only)
+    # Tool allow/deny + system prompt
+    system_prompt=None,            # str | None — system prompt (Claude)
+    append_system_prompt=None,     # str | None — append to system prompt (Claude)
+    allowed_tools=None,            # list[str] | None — allowed tools (Claude, Gemini)
+    disallowed_tools=None,         # list[str] | None — disallowed tools (Claude)
+    # Effort + structured output + fallback
+    effort=None,                   # EffortLevel | None — effort level (Claude, OpenCode variant)
+    fallback_model=None,           # str | None — fallback model (Claude)
+    json_schema=None,              # dict | None — JSON schema for structured output (Claude)
+    # Session lifecycle
+    session_name=None,             # str | None — session name (Claude --name, OpenCode --title)
+    continue_last=False,           # bool — continue last session (Claude, OpenCode)
+    fork_session=False,            # bool — fork session (Claude --fork-session, OpenCode --fork)
+    # Files
+    files=None,                    # list[str] | None — file attachments (Claude, OpenCode)
+    # Agent selection
+    agent_name=None,               # str | None — agent name (Claude, OpenCode)
+    # Sandbox and output control
+    sandbox=False,                 # bool — sandbox mode (all providers)
+    raw_output=False,              # bool — raw output without verbose (Claude, Gemini)
+    include_dirs=None,             # list[str] | None — additional directories (all providers)
 )
 ```
 
 `Agent` is a `@dataclass` with a `__post_init__` that:
 1. Resolves `model` from `DEFAULT_MODELS` if `None`
 2. Validates `provider` against `PROVIDER_MAP`
-3. Builds `_provider_instance` with model, mcp_servers, approval_mode, max_budget_usd
+3. Builds `_provider_instance` with all relevant fields forwarded to the provider
 
 Invalid provider names raise `ValueError` with the list of available providers.
 
@@ -175,12 +196,68 @@ path: str = await agent.check_available()
 status: AuthStatus = await agent.auth_status()
 # status.authenticated, status.email, status.subscription_type, ...
 
-# List sessions (Gemini and OpenCode only)
+# Login / logout (Claude, OpenCode)
+status: AuthStatus = await agent.auth_login(method="api_key")
+status: AuthStatus = await agent.auth_logout()
+
+# Session management (OpenCode, Gemini)
 sessions: list[SessionEntry] = await agent.list_sessions()
+deleted: bool = await agent.delete_session("sess-id")
+export: SessionExport = await agent.export_session("sess-id")
+new_id: str | None = await agent.import_session(json_data)
 
 # List models (OpenCode only)
 models: list[ModelInfo] = await agent.list_models()
 
 # Stats (OpenCode only)
 stats: dict = await agent.stats(days=7, cwd=".")
+
+# MCP management (Claude, OpenCode)
+added: bool = await agent.mcp_add("github", command="npx", args=["-y", "@mcp/server-github"])
+added: bool = await agent.mcp_add("docs", url="http://localhost:9000/sse")
+removed: bool = await agent.mcp_remove("github")
+servers: list[McpServerInfo] = await agent.mcp_list()
+
+# Extensions (Gemini only)
+extensions: list[ExtensionInfo] = await agent.list_extensions()
+
+# Doctor (Claude only)
+result: dict = await agent.doctor()
+```
+
+## Effort Levels
+
+Claude supports effort levels that control how much reasoning the model applies:
+
+```python
+from agentpipe import Agent, EffortLevel
+
+agent = Agent("claude", effort=EffortLevel.HIGH)
+# LOW, MEDIUM, HIGH, VERY_HIGH ("xhigh"), MAX
+```
+
+## Tool Allow/Deny
+
+Restrict which tools Claude can use:
+
+```python
+agent = Agent("claude", allowed_tools=["Read", "Write", "Grep"])
+agent = Agent("claude", disallowed_tools=["Bash", "rm"])
+```
+
+## Structured Output
+
+Request JSON output matching a schema (Claude):
+
+```python
+schema = {"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer"}}}
+agent = Agent("claude", json_schema=schema)
+```
+
+## Sandbox Mode
+
+Run the agent in a sandbox (Claude, Gemini, OpenCode):
+
+```python
+agent = Agent("claude", sandbox=True)
 ```

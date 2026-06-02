@@ -9,17 +9,25 @@ from ._session import AgentSession
 from ._types import (
     ApprovalMode,
     AuthStatus,
+    EffortLevel,
+    ExtensionInfo,
     McpServerConfig,
+    McpServerInfo,
     ModelInfo,
     SessionEntry,
+    SessionExport,
 )
+from .providers.aider import AiderProvider
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
+from .providers.kilo import KiloProvider
 from .providers.opencode import (
     OpencodeFreeProvider,
     OpencodeGoProvider,
     OpencodeZenProvider,
 )
+from .providers.qoder import QoderProvider
+from .providers.vibe import VibeProvider
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -29,7 +37,9 @@ if TYPE_CHECKING:
 DEFAULT_CWD = "/tmp"
 
 DEFAULT_MODELS: dict[str, str] = {
+    "aider": "openrouter/google/gemma-4-26b-a4b-it:free",
     "claude": "sonnet",
+    "kilo": "kilo/kilo-auto/free",
     "claude-sonnet": "sonnet",
     "claude-haiku": "haiku",
     "claude-opus": "opus",
@@ -40,10 +50,14 @@ DEFAULT_MODELS: dict[str, str] = {
     "opencode-free": "opencode/big-pickle",
     "opencode-zen": "opencode/gemini-3-flash",
     "opencode-go": "opencode-go/deepseek-v4-flash",
+    "qoder": "mistral-large-latest",
+    "vibe": "mistral-large-latest",
 }
 
 _PROVIDER_MAP: dict[str, type] = {
+    "aider": AiderProvider,
     "claude": ClaudeProvider,
+    "kilo": KiloProvider,
     "claude-sonnet": ClaudeSonnetProvider,
     "claude-haiku": ClaudeHaikuProvider,
     "claude-opus": ClaudeOpusProvider,
@@ -54,6 +68,8 @@ _PROVIDER_MAP: dict[str, type] = {
     "opencode-free": OpencodeFreeProvider,
     "opencode-zen": OpencodeZenProvider,
     "opencode-go": OpencodeGoProvider,
+    "qoder": QoderProvider,
+    "vibe": VibeProvider,
 }
 
 
@@ -76,6 +92,33 @@ class Agent:
     max_budget_usd: float | None = None
     executor: AsyncSubprocessExecutor = field(default_factory=AsyncSubprocessExecutor)
 
+    # Module 1: Tool allow/deny + system prompt
+    system_prompt: str | None = None
+    append_system_prompt: str | None = None
+    allowed_tools: list[str] | None = None
+    disallowed_tools: list[str] | None = None
+
+    # Module 2: Effort level + structured output + fallback
+    effort: EffortLevel | None = None
+    fallback_model: str | None = None
+    json_schema: dict | None = None
+
+    # Module 3: Session lifecycle
+    session_name: str | None = None
+    continue_last: bool = False
+    fork_session: bool = False
+
+    # Module 6: File attachments
+    files: list[str] | None = None
+
+    # Module 7: Agent selection
+    agent_name: str | None = None
+
+    # Module 9: Sandbox and output control
+    sandbox: bool = False
+    raw_output: bool = False
+    include_dirs: list[str] | None = None
+
     def __post_init__(self) -> None:
         if self.model is None:
             self.model = DEFAULT_MODELS.get(self.provider)
@@ -90,6 +133,36 @@ class Agent:
             kwargs["approval_mode"] = self.approval_mode
         if self.max_budget_usd is not None:
             kwargs["max_budget_usd"] = self.max_budget_usd
+        if self.system_prompt is not None:
+            kwargs["system_prompt"] = self.system_prompt
+        if self.append_system_prompt is not None:
+            kwargs["append_system_prompt"] = self.append_system_prompt
+        if self.allowed_tools is not None:
+            kwargs["allowed_tools"] = self.allowed_tools
+        if self.disallowed_tools is not None:
+            kwargs["disallowed_tools"] = self.disallowed_tools
+        if self.effort is not None:
+            kwargs["effort"] = self.effort.value
+        if self.fallback_model is not None:
+            kwargs["fallback_model"] = self.fallback_model
+        if self.json_schema is not None:
+            kwargs["json_schema"] = self.json_schema
+        if self.session_name is not None:
+            kwargs["session_name"] = self.session_name
+        if self.agent_name is not None:
+            kwargs["agent_name"] = self.agent_name
+        if self.sandbox:
+            kwargs["sandbox"] = self.sandbox
+        if self.raw_output:
+            kwargs["raw_output"] = self.raw_output
+        if self.include_dirs is not None:
+            kwargs["include_dirs"] = self.include_dirs
+        if self.continue_last:
+            kwargs["continue_last"] = self.continue_last
+        if self.fork_session:
+            kwargs["fork_session"] = self.fork_session
+        if self.files is not None:
+            kwargs["files"] = self.files
         self._provider_instance = cls(**kwargs)
 
     async def generate(
@@ -148,6 +221,81 @@ class Agent:
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_auth_status()
         return AuthStatus(authenticated=False, provider=self.provider)
+
+    async def auth_login(self, *, method: str | None = None) -> AuthStatus:
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_auth_login()
+        if self.provider == "claude":
+            return await self._claude_auth_login(method=method)
+        raise NotImplementedError(f"auth_login not supported for {self.provider}")
+
+    async def auth_logout(self) -> AuthStatus:
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_auth_logout()
+        if self.provider == "claude":
+            return await self._claude_auth_logout()
+        raise NotImplementedError(f"auth_logout not supported for {self.provider}")
+
+    async def delete_session(self, session_id: str, *, cwd: str | None = None) -> bool:
+        effective_cwd = cwd or self.cwd
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_delete_session(session_id, effective_cwd)
+        raise NotImplementedError(f"delete_session not supported for {self.provider}")
+
+    async def export_session(self, session_id: str, *, cwd: str | None = None) -> SessionExport:
+        effective_cwd = cwd or self.cwd
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_export_session(session_id, effective_cwd)
+        raise NotImplementedError(f"export_session not supported for {self.provider}")
+
+    async def import_session(self, data: str, *, cwd: str | None = None) -> str | None:
+        effective_cwd = cwd or self.cwd
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_import_session(data, effective_cwd)
+        raise NotImplementedError(f"import_session not supported for {self.provider}")
+
+    async def mcp_add(
+        self,
+        name: str,
+        *,
+        url: str | None = None,
+        command: str | None = None,
+        args: list[str] | None = None,
+        env: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        scope: str | None = None,
+    ) -> bool:
+        if self.provider == "claude":
+            return await self._claude_mcp_add(
+                name, url=url, command=command, args=args, env=env, headers=headers, scope=scope
+            )
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_mcp_add(name, url=url, command=command, args=args, env=env)
+        raise NotImplementedError(f"mcp_add not supported for {self.provider}")
+
+    async def mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
+        if self.provider == "claude":
+            return await self._claude_mcp_remove(name, scope=scope)
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_mcp_remove(name)
+        raise NotImplementedError(f"mcp_remove not supported for {self.provider}")
+
+    async def mcp_list(self) -> list[McpServerInfo]:
+        if self.provider == "claude":
+            return await self._claude_mcp_list()
+        if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
+            return await self._opencode_mcp_list()
+        raise NotImplementedError(f"mcp_list not supported for {self.provider}")
+
+    async def list_extensions(self) -> list[ExtensionInfo]:
+        if self.provider == "gemini":
+            return await self._gemini_list_extensions()
+        raise NotImplementedError(f"list_extensions not supported for {self.provider}")
+
+    async def doctor(self) -> dict:
+        if self.provider == "claude":
+            return await self._claude_doctor()
+        raise NotImplementedError(f"doctor not supported for {self.provider}")
 
     async def list_sessions(self, *, cwd: str | None = None) -> list[SessionEntry]:
         effective_cwd = cwd or self.cwd
@@ -295,6 +443,283 @@ class Agent:
             cwd=cwd,
             env=self._provider_instance.build_env(),
             timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            return {"raw": stdout}
+        except AgentProcessError:
+            return {"raw": ""}
+
+    async def _claude_auth_login(self, *, method: str | None = None) -> AuthStatus:
+        from ._types import CommandSpec
+
+        cmd = [self._provider_instance.binary_name, "auth", "login"]
+        if method:
+            cmd.extend([f"--{method}"])
+        spec = CommandSpec(argv=cmd, stdin="", env=self._provider_instance.build_env(), timeout=120.0)
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=True, provider="claude", method=method)
+        except AgentProcessError:
+            return AuthStatus(authenticated=False, provider="claude")
+
+    async def _claude_auth_logout(self) -> AuthStatus:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "auth", "logout"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=False, provider="claude")
+        except AgentProcessError:
+            return AuthStatus(authenticated=False, provider="claude")
+
+    async def _opencode_auth_login(self) -> AuthStatus:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "providers", "login"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=120.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=True, provider="opencode")
+        except AgentProcessError:
+            return AuthStatus(authenticated=False, provider="opencode")
+
+    async def _opencode_auth_logout(self) -> AuthStatus:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "providers", "logout"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=False, provider="opencode")
+        except AgentProcessError:
+            return AuthStatus(authenticated=False, provider="opencode")
+
+    async def _opencode_delete_session(self, session_id: str, cwd: str) -> bool:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "session", "delete", session_id],
+            stdin="",
+            cwd=cwd,
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError:
+            return False
+
+    async def _opencode_export_session(self, session_id: str, cwd: str) -> SessionExport:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "export", session_id, "--format", "json"],
+            stdin="",
+            cwd=cwd,
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            return SessionExport(session_id=session_id, data=stdout, format="json")
+        except AgentProcessError:
+            return SessionExport(session_id=session_id, data="", format="json")
+
+    async def _opencode_import_session(self, data: str, cwd: str) -> str | None:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "import", "-"],
+            stdin=data,
+            cwd=cwd,
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line:
+                    return line
+            return None
+        except AgentProcessError:
+            return None
+
+    async def _claude_mcp_add(
+        self,
+        name: str,
+        *,
+        url: str | None = None,
+        command: str | None = None,
+        args: list[str] | None = None,
+        env: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        scope: str | None = None,
+    ) -> bool:
+        from ._types import CommandSpec
+
+        if url:
+            cmd = [self._provider_instance.binary_name, "mcp", "add", name, "-t", "sse", "--url", url]
+            if headers:
+                for k, v in headers.items():
+                    cmd.extend(["--header", f"{k}:{v}"])
+        elif command:
+            cmd = [self._provider_instance.binary_name, "mcp", "add", name, "-t", "stdio", command]
+            if args:
+                cmd.extend(args)
+        else:
+            return False
+        if scope:
+            cmd.extend(["--scope", scope])
+        if env:
+            cmd.extend(["-e", json.dumps(env)])
+        spec = CommandSpec(argv=cmd, stdin="", env=self._provider_instance.build_env(), timeout=15.0)
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError:
+            return False
+
+    async def _claude_mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
+        from ._types import CommandSpec
+
+        cmd = [self._provider_instance.binary_name, "mcp", "remove", name]
+        if scope:
+            cmd.extend(["--scope", scope])
+        spec = CommandSpec(argv=cmd, stdin="", env=self._provider_instance.build_env(), timeout=15.0)
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError:
+            return False
+
+    async def _claude_mcp_list(self) -> list[McpServerInfo]:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "mcp", "list"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            servers: list[McpServerInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line and not line.startswith("No"):
+                    servers.append(McpServerInfo(name=line, provider="claude"))
+            return servers
+        except AgentProcessError:
+            return []
+
+    async def _opencode_mcp_add(
+        self,
+        name: str,
+        *,
+        url: str | None = None,
+        command: str | None = None,
+        args: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> bool:
+        from ._types import CommandSpec
+
+        if url:
+            cmd = [self._provider_instance.binary_name, "mcp", "add", name, "-t", "sse", "--url", url]
+        elif command:
+            cmd = [self._provider_instance.binary_name, "mcp", "add", name, "-t", "stdio", command]
+            if args:
+                cmd.extend(args)
+        else:
+            return False
+        if env:
+            for k, v in env.items():
+                cmd.extend(["-e", f"{k}={v}"])
+        spec = CommandSpec(argv=cmd, stdin="", env=self._provider_instance.build_env(), timeout=15.0)
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError:
+            return False
+
+    async def _opencode_mcp_remove(self, name: str) -> bool:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "mcp", "remove", name],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError:
+            return False
+
+    async def _opencode_mcp_list(self) -> list[McpServerInfo]:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "mcp", "list"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            servers: list[McpServerInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line and not line.startswith("No"):
+                    servers.append(McpServerInfo(name=line, provider="opencode"))
+            return servers
+        except AgentProcessError:
+            return []
+
+    async def _gemini_list_extensions(self) -> list[ExtensionInfo]:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "extensions", "list"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            extensions: list[ExtensionInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line:
+                    extensions.append(ExtensionInfo(name=line, provider="gemini"))
+            return extensions
+        except AgentProcessError:
+            return []
+
+    async def _claude_doctor(self) -> dict:
+        from ._types import CommandSpec
+
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "doctor"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
         )
         try:
             stdout, _stderr = await self.executor.run(spec)

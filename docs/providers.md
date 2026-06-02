@@ -7,6 +7,9 @@ Each provider has shortcuts that pre-fill the default model for a particular tie
 ```python
 from agentpipe import Agent
 
+# Aider — open-source, CLI-first (free via OpenRouter free tier)
+Agent("aider")            # model="openrouter/google/gemma-4-26b-a4b-it:free"  (AiderProvider)
+
 # Claude family
 Agent("claude")           # model="sonnet"    (ClaudeProvider)
 Agent("claude-sonnet")    # model="sonnet"    (ClaudeSonnetProvider)
@@ -18,11 +21,20 @@ Agent("gemini")           # model="gemini-2.5-flash"  (GeminiProvider)
 Agent("gemini-flash")     # model="gemini-2.5-flash"  (GeminiFlashProvider)
 Agent("gemini-pro")       # model="gemini-2.5-pro"   (GeminiProProvider)
 
+# Kilo Code — fork of OpenCode with free tier
+Agent("kilo")             # model="kilo/kilo-auto/free"  (KiloProvider)
+
 # OpenCode family — three plans
 Agent("opencode")         # model="opencode/gemini-3-flash"  (OpencodeZenProvider)
 Agent("opencode-free")    # model="opencode/big-pickle"      (OpencodeFreeProvider)
 Agent("opencode-zen")     # model="opencode/gemini-3-flash"  (OpencodeZenProvider)
 Agent("opencode-go")      # model="opencode-go/deepseek-v4-flash" (OpencodeGoProvider)
+
+# QoderCLI
+Agent("qoder")            # model=None (uses QoderCLI default)  (QoderProvider)
+
+# Mistral Vibe
+Agent("vibe")             # model="mistral-large-latest"  (VibeProvider)
 ```
 
 Override the model at any time:
@@ -35,7 +47,8 @@ Agent("opencode-go", model="opencode-go/kimi-k2.6")
 ## Default Models
 
 | Provider Key | Class | Default Model |
-|---|---|---|
+|---|---|---|---|
+| `aider` | `AiderProvider` | `openrouter/google/gemma-4-26b-a4b-it:free` |
 | `claude` | `ClaudeProvider` | `sonnet` |
 | `claude-sonnet` | `ClaudeSonnetProvider` | `sonnet` |
 | `claude-haiku` | `ClaudeHaikuProvider` | `haiku` |
@@ -43,10 +56,13 @@ Agent("opencode-go", model="opencode-go/kimi-k2.6")
 | `gemini` | `GeminiProvider` | `gemini-2.5-flash` |
 | `gemini-flash` | `GeminiFlashProvider` | `gemini-2.5-flash` |
 | `gemini-pro` | `GeminiProProvider` | `gemini-2.5-pro` |
+| `kilo` | `KiloProvider` | `kilo/kilo-auto/free` |
 | `opencode` | `OpencodeZenProvider` | `opencode/gemini-3-flash` |
 | `opencode-free` | `OpencodeFreeProvider` | `opencode/big-pickle` |
 | `opencode-zen` | `OpencodeZenProvider` | `opencode/gemini-3-flash` |
 | `opencode-go` | `OpencodeGoProvider` | `opencode-go/deepseek-v4-flash` |
+| `qoder` | `QoderProvider` | *(uses QoderCLI default)* |
+| `vibe` | `VibeProvider` | `mistral-large-latest` |
 
 ## OpenCode Plans: Free / Zen / Go
 

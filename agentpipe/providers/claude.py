@@ -135,11 +135,41 @@ class ClaudeProvider:
         mcp_servers: list[McpServerConfig] | None = None,
         approval_mode: ApprovalMode | None = None,
         max_budget_usd: float | None = None,
+        system_prompt: str | None = None,
+        append_system_prompt: str | None = None,
+        allowed_tools: list[str] | None = None,
+        disallowed_tools: list[str] | None = None,
+        effort: str | None = None,
+        fallback_model: str | None = None,
+        json_schema: dict | None = None,
+        agent_name: str | None = None,
+        sandbox: bool = False,
+        raw_output: bool = False,
+        include_dirs: list[str] | None = None,
+        session_name: str | None = None,
+        continue_last: bool = False,
+        fork_session: bool = False,
+        files: list[str] | None = None,
     ) -> None:
         self._model = model
         self._mcp_servers = mcp_servers or []
         self._approval_mode = approval_mode
         self._max_budget_usd = max_budget_usd
+        self._system_prompt = system_prompt
+        self._append_system_prompt = append_system_prompt
+        self._allowed_tools = allowed_tools
+        self._disallowed_tools = disallowed_tools
+        self._effort = effort
+        self._fallback_model = fallback_model
+        self._json_schema = json_schema
+        self._agent_name = agent_name
+        self._sandbox = sandbox
+        self._raw_output = raw_output
+        self._include_dirs = include_dirs
+        self._session_name = session_name
+        self._continue_last = continue_last
+        self._fork_session = fork_session
+        self._files = files
         self._tool_map: dict[str, str] = {}
         self._tool_start_times: dict[str, float] = {}
 
@@ -189,10 +219,52 @@ class ClaudeProvider:
             cmd.pop()
             cmd.extend(["--permission-mode", _APPROVAL_MODE_MAP[self._approval_mode]])
 
-        cmd.extend(["--output-format", "stream-json", "--verbose"])
+        if self._system_prompt:
+            cmd.extend(["--system-prompt", self._system_prompt])
+        if self._append_system_prompt:
+            cmd.extend(["--append-system-prompt", self._append_system_prompt])
+        if self._allowed_tools:
+            for tool in self._allowed_tools:
+                cmd.extend(["--allowedTools", tool])
+        if self._disallowed_tools:
+            for tool in self._disallowed_tools:
+                cmd.extend(["--disallowedTools", tool])
+        if self._effort:
+            cmd.extend(["--effort", self._effort])
+        if self._fallback_model:
+            cmd.extend(["--fallback-model", self._fallback_model])
+        if self._json_schema:
+            cmd.extend(["--output-format", "json", "--json-schema", json.dumps(self._json_schema)])
+        elif not self._raw_output:
+            cmd.extend(["--output-format", "stream-json", "--verbose"])
+        else:
+            cmd.extend(["--output-format", "stream-json"])
 
         if session_id:
             cmd.extend(["--resume", session_id])
+
+        if self._sandbox:
+            cmd.append("--sandbox")
+
+        if self._agent_name:
+            cmd.extend(["--agent", self._agent_name])
+
+        if self._session_name:
+            cmd.extend(["--name", self._session_name])
+
+        if self._continue_last:
+            cmd.append("--continue")
+
+        if self._fork_session and (session_id or self._continue_last):
+            cmd.append("--fork-session")
+
+        if self._include_dirs:
+            for d in self._include_dirs:
+                cmd.extend(["--add-dir", d])
+
+        if self._files:
+            for f in self._files:
+                cmd.extend(["--file", f])
 
         cmd.append(prompt)
 

@@ -10,8 +10,8 @@ from agentpipe import (
     # Types
     AgentEvent, ThinkingEvent, ToolCallEvent, ToolResultEvent, UsageEvent,
     GenerationResult, SessionInfo, SessionUsage, CommandSpec,
-    ApprovalMode, AuthStatus, ModelInfo, SessionEntry,
-    McpServerConfig, HttpMcpServer, StdioMcpServer,
+    ApprovalMode, EffortLevel, AuthStatus, ModelInfo, SessionEntry, SessionExport,
+    McpServerConfig, HttpMcpServer, StdioMcpServer, McpServerInfo, ExtensionInfo,
     Provider, QuotaStatus,
 
     # Constants
@@ -26,9 +26,12 @@ from agentpipe import (
     CascadeAttempt, CascadeResult, tier_summary,
 
     # Provider classes
+    AiderProvider,
     ClaudeProvider, ClaudeSonnetProvider, ClaudeHaikuProvider, ClaudeOpusProvider,
     GeminiProvider, GeminiFlashProvider, GeminiProProvider,
+    KiloProvider,
     OpencodeProvider, OpencodeFreeProvider, OpencodeZenProvider, OpencodeGoProvider,
+    QoderProvider, VibeProvider,
 
     # Quota
     check_quota, parse_rate_limit_error,
@@ -47,28 +50,60 @@ class Agent:
     mcp_servers: list[McpServerConfig] = []    # Claude MCP servers
     approval_mode: ApprovalMode | None = None  # Claude permission mode
     max_budget_usd: float | None = None        # Claude budget cap
+    # Tool allow/deny + system prompt
+    system_prompt: str | None = None           # Claude system prompt override
+    append_system_prompt: str | None = None    # Claude append to system prompt
+    allowed_tools: list[str] | None = None     # Claude allowed tools
+    disallowed_tools: list[str] | None = None  # Claude disallowed tools
+    # Effort + structured output + fallback
+    effort: EffortLevel | None = None          # Claude effort level
+    fallback_model: str | None = None          # Claude fallback model
+    json_schema: dict | None = None            # Claude JSON schema
+    # Session lifecycle
+    session_name: str | None = None            # Session name
+    continue_last: bool = False                # Continue last session
+    fork_session: bool = False                 # Fork session
+    # Files
+    files: list[str] | None = None             # File attachments
+    # Agent selection
+    agent_name: str | None = None              # Claude agent name
+    # Sandbox and output control
+    sandbox: bool = False                       # Sandbox mode
+    raw_output: bool = False                    # Raw output (no verbose)
+    include_dirs: list[str] | None = None      # Additional directories
     executor: AsyncSubprocessExecutor = ...     # Dependency injection
 ```
 
 ### Methods
 
-| Method | Signature | Return |
-|---|---|---|
-| `generate` | `(self, prompt, *, cwd=None, timeout=None)` | `str` |
-| `generate_stream` | `(self, prompt, *, cwd=None, timeout=None)` | `AsyncIterator[AgentEvent]` |
-| `generate_full` | `(self, prompt, *, cwd=None, timeout=None)` | `GenerationResult` |
-| `session` | `(self, *, cwd=None, timeout=None)` | `AgentSession` |
-| `check_available` | `(self)` | `str` |
-| `auth_status` | `(self)` | `AuthStatus` |
-| `list_sessions` | `(self, *, cwd=None)` | `list[SessionEntry]` |
-| `list_models` | `(self)` | `list[ModelInfo]` |
-| `stats` | `(self, *, days=None, cwd=None)` | `dict` |
+| Method | Signature | Return | Providers |
+|---|---|---|---|
+| `generate` | `(self, prompt, *, cwd=None, timeout=None)` | `str` | All |
+| `generate_stream` | `(self, prompt, *, cwd=None, timeout=None)` | `AsyncIterator[AgentEvent]` | All |
+| `generate_full` | `(self, prompt, *, cwd=None, timeout=None)` | `GenerationResult` | All |
+| `session` | `(self, *, cwd=None, timeout=None)` | `AgentSession` | All |
+| `check_available` | `(self)` | `str` | All |
+| `auth_status` | `(self)` | `AuthStatus` | All |
+| `auth_login` | `(self, *, method=None)` | `AuthStatus` | Claude, OpenCode |
+| `auth_logout` | `(self)` | `AuthStatus` | Claude, OpenCode |
+| `list_sessions` | `(self, *, cwd=None)` | `list[SessionEntry]` | Gemini, OpenCode |
+| `delete_session` | `(self, session_id, *, cwd=None)` | `bool` | OpenCode |
+| `export_session` | `(self, session_id, *, cwd=None)` | `SessionExport` | OpenCode |
+| `import_session` | `(self, data, *, cwd=None)` | `str \| None` | OpenCode |
+| `list_models` | `(self)` | `list[ModelInfo]` | OpenCode |
+| `stats` | `(self, *, days=None, cwd=None)` | `dict` | OpenCode |
+| `mcp_add` | `(self, name, *, url=None, command=None, args=None, env=None, headers=None, scope=None)` | `bool` | Claude, OpenCode |
+| `mcp_remove` | `(self, name, *, scope=None)` | `bool` | Claude, OpenCode |
+| `mcp_list` | `(self)` | `list[McpServerInfo]` | Claude, OpenCode |
+| `list_extensions` | `(self)` | `list[ExtensionInfo]` | Gemini |
+| `doctor` | `(self)` | `dict` | Claude |
 
 ## Constants
 
 | Constant | Value |
 |---|---|
 | `DEFAULT_CWD` | `"/tmp"` |
+| `DEFAULT_MODELS["aider"]` | `"openrouter/google/gemma-4-26b-a4b-it:free"` |
 | `DEFAULT_MODELS["claude"]` | `"sonnet"` |
 | `DEFAULT_MODELS["claude-sonnet"]` | `"sonnet"` |
 | `DEFAULT_MODELS["claude-haiku"]` | `"haiku"` |
@@ -76,10 +111,13 @@ class Agent:
 | `DEFAULT_MODELS["gemini"]` | `"gemini-2.5-flash"` |
 | `DEFAULT_MODELS["gemini-flash"]` | `"gemini-2.5-flash"` |
 | `DEFAULT_MODELS["gemini-pro"]` | `"gemini-2.5-pro"` |
+| `DEFAULT_MODELS["kilo"]` | `"kilo/kilo-auto/free"` |
 | `DEFAULT_MODELS["opencode"]` | `"opencode/gemini-3-flash"` |
 | `DEFAULT_MODELS["opencode-free"]` | `"opencode/big-pickle"` |
 | `DEFAULT_MODELS["opencode-zen"]` | `"opencode/gemini-3-flash"` |
 | `DEFAULT_MODELS["opencode-go"]` | `"opencode-go/deepseek-v4-flash"` |
+| `DEFAULT_MODELS["qoder"]` | `"mistral-large-latest"` |
+| `DEFAULT_MODELS["vibe"]` | `"mistral-large-latest"` |
 
 ## Enums
 
@@ -90,6 +128,13 @@ class ApprovalMode(str, Enum):
     YOLO = "yolo"
     PLAN = "plan"
     BYPASS = "bypass"
+
+class EffortLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "xhigh"
+    MAX = "max"
 
 class ModelTier(int, Enum):
     FREE = 0
@@ -144,6 +189,15 @@ class ErrorType(str, Enum):
 
 ### ModelInfo (frozen)
 `id: str`, `name: str | None = None`, `provider: str | None = None`, `context_window: int | None = None`, `cost_per_million_input: float | None = None`, `cost_per_million_output: float | None = None`
+
+### McpServerInfo (frozen)
+`name: str`, `type: str | None = None`, `url: str | None = None`, `command: str | None = None`, `args: list[str] | None = None`, `env: dict[str, str] | None = None`, `headers: dict[str, str] | None = None`, `scope: str | None = None`, `enabled: bool | None = None`
+
+### ExtensionInfo (frozen)
+`name: str`, `version: str | None = None`, `description: str | None = None`, `enabled: bool | None = None`
+
+### SessionExport (frozen)
+`session_id: str`, `data: str`, `format: str = "json"`
 
 ### QuotaStatus (mutable)
 `authenticated: bool = False`, `subscription_type: str | None = None`, `email: str | None = None`, `plan_limits: dict = {}`, `rate_limited: bool = False`, `rate_limit_resets_in_seconds: int | None = None`, `available_models: list[str] = []`, `usage_stats: dict = {}`, `provider: str | None = None`, `raw_auth: dict | None = None`, `raw_error: str | None = None`

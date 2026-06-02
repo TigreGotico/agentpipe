@@ -53,8 +53,12 @@ class Provider(Protocol):
 | `OpencodeFreeProvider` | `opencode` | `opencode/big-pickle` | `free` | plain `os.environ` |
 | `OpencodeZenProvider` | `opencode` | `opencode/gemini-3-flash` | `zen` | plain `os.environ` |
 | `OpencodeGoProvider` | `opencode` | `opencode-go/deepseek-v4-flash` | `go` | plain `os.environ` |
+| `QoderProvider` | `qodercli` | `None` (uses QoderCLI default) | — | plain `os.environ` |
+| `VibeProvider` | `vibe` | `mistral-large-latest` | — | `MISTRAL_API_KEY` |
 
 `OpencodeProvider` is the base class. `OpencodeFreeProvider`, `OpencodeZenProvider`, and `OpencodeGoProvider` inherit from it and set different default models and `plan` properties. `OpencodeProvider()` is a backward-compat alias that behaves identically to `OpencodeZenProvider()`.
+
+`QoderProvider` mirrors the Claude Code CLI interface since QoderCLI is architecturally similar (same `-p`, `--permission-mode`, `--output-format stream-json`, `--dangerously-skip-permissions` flags). `VibeProvider` uses Mistral's `vibe` binary with `--prompt` and `--output streaming` flags.
 
 ## Command Building
 
@@ -63,28 +67,77 @@ Each provider constructs CLI commands differently:
 ### Claude
 
 ```
-claude -p --dangerously-skip-permissions --output-format stream-json --verbose [--resume <id>] <prompt> --model <model> [--mcp-config <json>] [--max-budget-usd <n>]
+claude -p [--dangerously-skip-permissions | --permission-mode <mode>]
+    [--system-prompt <prompt>] [--append-system-prompt <prompt>]
+    [--allowedTools <tool>]... [--disallowedTools <tool>]...
+    [--effort <level>] [--fallback-model <model>]
+    [--output-format stream-json] [--verbose]
+    [--json-schema <schema>] [--sandbox] [--agent <name>]
+    [--name <session>] [--continue] [--fork-session]
+    [--add-dir <dir>]... [--file <spec>]...
+    [--resume <id>] <prompt> --model <model>
+    [--mcp-config <json>] [--strict-mcp-config] [--max-budget-usd <n>]
 ```
 
-The `--dangerously-skip-permissions` flag is used by default (or with `YOLO`/`BYPASS` approval modes). Other modes get `--permission-mode <mode>` instead.
+The `--dangerously-skip-permissions` flag is used by default (or with `YOLO`/`BYPASS` approval modes). Other modes get `--permission-mode <mode>` instead. `--verbose` is omitted when `raw_output=True`. `--json-schema` switches output format to `json`.
 
 MCP servers are serialized to JSON and passed via `--mcp-config`. Budget caps use `--max-budget-usd`.
 
 ### Gemini
 
 ```
-gemini -y --model <model> -o stream-json -p <prompt> [--resume <id>]
+gemini [--yolo | --approval-mode <mode>] --model <model>
+    [--sandbox] [--include-directories <dir>]...
+    [--allowed-tools <tool>]... [--extensions <ext>]...
+    [--output-format stream-json | --output-format json --raw-output]
+    -p <prompt> [--resume <id>]
 ```
 
-The `-y` flag auto-accepts prompts. `-p <prompt>` sends the prompt as a flag (not stdin, since Gemini doesn't support stdin). `GEMINI_CLI_TRUST_WORKSPACE=true` is injected to allow running in `/tmp`.
+The `-y` flag is for non-interactive mode. Approval mode maps: YOLO/BYPASS → `--yolo`, others → `--approval-mode <mode>`.
 
 ### OpenCode (all variants)
 
 ```
-opencode run [--session <id>] <prompt> --model <model> --format=json
+opencode run [--session <id>] [--continue] [--fork]
+    [--dangerously-skip-permissions] [--sandbox]
+    [--agent <name>] [--title <session>]
+    --model <model> [--variant <effort>]
+    [--dir <dir>]... [--file <file>]...
+    <prompt> --format=json
 ```
 
-All three sub-providers (Free, Zen, Go) use the same binary and command format. The model prefix (`opencode/` vs `opencode-go/`) determines the API endpoint.
+All three sub-providers (Free, Zen, Go) use the same binary and command format. The model prefix (`opencode/` vs `opencode-go/`) determines the API endpoint. Effort level maps: low→minimal, medium→low, high→high, xhigh/max→max.
+
+### QoderCLI
+
+```
+qodercli -p [--dangerously-skip-permissions | --permission-mode <mode>]
+    [--system-prompt <prompt>] [--append-system-prompt <prompt>]
+    [--allowed-tools <tool>]... [--disallowed-tools <tool>]...
+    [--effort <level>] [--fallback-model <model>]
+    [--output-format stream-json] [--verbose]
+    [--json-schema <schema>] [--sandbox] [--agent <name>]
+    [--name <session>] [--continue] [--fork-session]
+    [--add-dir <dir>]... [--file <spec>]...
+    [--max-turns <n>]
+    [--resume <id>] <prompt> --model <model>
+    [--mcp-config <json>] [--strict-mcp-config] [--max-budget-usd <n>]
+```
+
+QoderCLI mirrors Claude Code's CLI interface closely (same flags, same streaming format). It includes additional `--max-turns` and `--allowed-mcp-server-names` flags.
+
+### Vibe
+
+```
+vibe --prompt <prompt> [--agent <name>]
+    [--continue] [--resume <id>]
+    [--sandbox] [--add-dir <dir>]...
+    [--enabled-tools <tool>]...
+    [--max-turns <n>] [--max-price <dollars>] [--max-tokens <n>]
+    --output streaming
+```
+
+Vibe uses `--prompt` (not stdin), `--continue`/`--resume` for sessions, `--output streaming` for NDJSON, and `--agent` for approval profiles (default, plan, accept-edits, auto-approve). It does not support system prompts, MCP config, or effort levels via CLI flags — those are configured through `~/.vibe/config.toml`.
 
 ## Event Parsing
 
@@ -112,6 +165,22 @@ Emits `text`, `tool_use`, `step_start`, and `step_finish` events:
 - `text` type → `ThinkingEvent`
 - `tool_use` with `state.input` → `ToolCallEvent`; with `state.output` → `ToolResultEvent`
 - `step_finish` → `UsageEvent` with `cost` and `tokens` (including `cache.read`/`cache.write`)
+
+### QoderCLI
+
+Uses the same `stream-json` format as Claude Code:
+- `system` → extracts `session_id`
+- `assistant` → may contain multiple content blocks (text, tool_use) in a single line → expanded into individual events
+- `user` → tool_result blocks
+- `result` → final text, usage (`input_tokens`, `output_tokens`, `cache_*`), and `total_cost_usd`
+
+### Vibe
+
+Emits newline-delimited JSON events in `streaming` format:
+- `text` or `assistant` type → `ThinkingEvent`
+- `tool_use` type → `ToolCallEvent` with `tool_id` and duration tracking
+- `tool_result` type → `ToolResultEvent` with duration tracking
+- `usage` type → `UsageEvent` with `input_tokens`, `output_tokens`, `cost_usd`
 
 Provider-specific parsing lives in the provider classes (`parse_event_line`, `extract_session_id`, `extract_text`).
 

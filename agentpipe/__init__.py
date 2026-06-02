@@ -8,12 +8,16 @@ from ._types import (
     ApprovalMode,
     AuthStatus,
     CommandSpec,
+    EffortLevel,
+    ExtensionInfo,
     GenerationResult,
     HttpMcpServer,
     McpServerConfig,
+    McpServerInfo,
     ModelInfo,
     Provider,
     SessionEntry,
+    SessionExport,
     SessionInfo,
     SessionUsage,
     StdioMcpServer,
@@ -35,21 +39,27 @@ from .cascade import (
     cascade_free_only,
     tier_summary,
 )
+from .providers.aider import AiderProvider
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
+from .providers.kilo import KiloProvider
 from .providers.opencode import (
     OpencodeFreeProvider,
     OpencodeGoProvider,
     OpencodeProvider,
     OpencodeZenProvider,
 )
+from .providers.qoder import QoderProvider
+from .providers.vibe import VibeProvider
 
 __all__ = [
     "Agent",
     "AgentProcessError",
     "AgentSession",
     "AgentEvent",
+    "AiderProvider",
     "ApprovalMode",
+    "KiloProvider",
     "AuthStatus",
     "ClaudeHaikuProvider",
     "ClaudeOpusProvider",
@@ -61,13 +71,16 @@ __all__ = [
     "CASCADE_PROFILES",
     "CascadeAttempt",
     "CascadeResult",
+    "EffortLevel",
     "ErrorType",
+    "ExtensionInfo",
     "GenerationResult",
     "GeminiFlashProvider",
     "GeminiProProvider",
     "GeminiProvider",
     "HttpMcpServer",
     "McpServerConfig",
+    "McpServerInfo",
     "ModelInfo",
     "ModelTier",
     "MODEL_TIER_MAP",
@@ -75,9 +88,12 @@ __all__ = [
     "OpencodeGoProvider",
     "OpencodeProvider",
     "OpencodeZenProvider",
+    "QoderProvider",
+    "VibeProvider",
     "Provider",
     "QuotaStatus",
     "SessionEntry",
+    "SessionExport",
     "SessionInfo",
     "SessionUsage",
     "StdioMcpServer",
