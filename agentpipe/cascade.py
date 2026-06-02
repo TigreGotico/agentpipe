@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -42,6 +43,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from ._types import GenerationResult
+
+logger = logging.getLogger(__name__)
 
 
 class ModelTier(int, Enum):
@@ -168,11 +171,15 @@ MODEL_PROVIDER_MAP: dict[str, str] = {
     "gemini-2.5-pro": "gemini",
 }
 
+
 async def _call_on_attempt(callback: callable, attempt: CascadeAttempt) -> None:
-    if inspect.iscoroutinefunction(callback):
-        await callback(attempt)
-    else:
-        callback(attempt)
+    try:
+        if inspect.iscoroutinefunction(callback):
+            await callback(attempt)
+        else:
+            callback(attempt)
+    except Exception as e:
+        logger.warning("on_attempt callback raised %s: %s", type(e).__name__, e)
 
 
 _FREE_MODELS: frozenset[str] = frozenset(

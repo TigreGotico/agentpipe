@@ -119,6 +119,7 @@ def _build_agent(name: str, req: CreateAgentRequest) -> Agent:
         kwargs["cwd"] = cfg.cwd
     if cfg.approval_mode:
         from agentpipe._types import ApprovalMode
+
         kwargs["approval_mode"] = ApprovalMode(cfg.approval_mode)
     if cfg.sandbox:
         kwargs["sandbox"] = True
@@ -134,6 +135,7 @@ def _build_agent(name: str, req: CreateAgentRequest) -> Agent:
         kwargs["disallowed_tools"] = cfg.disallowed_tools
     if cfg.effort:
         from agentpipe._types import EffortLevel
+
         kwargs["effort"] = EffortLevel(cfg.effort)
     agent = Agent(cfg.provider, **kwargs)
     return agent
@@ -336,11 +338,15 @@ async def openai_chat_completions(body: dict):
 
 async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
     async with ma.lock:
-        if ma.session_id:
-            ma.agent.continue_last = True
-        result = await ma.agent.generate_full(prompt)
-        if result.session_id:
-            ma.session_id = result.session_id
+        try:
+            if ma.session_id:
+                ma.agent.continue_last = True
+            result = await ma.agent.generate_full(prompt)
+            if result.session_id:
+                ma.session_id = result.session_id
+        except Exception as e:
+            logger.exception("OpenAI-compat completion failed for model '%s'", model)
+            raise HTTPException(500, str(e)) from e
 
     usage = result.usage or UsageEvent()
     return {
