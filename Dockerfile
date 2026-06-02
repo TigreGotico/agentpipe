@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir agentpipe fastapi uvicorn[standard] sse-starlette
+# Install build deps, then copy and install from source
+COPY pyproject.toml README.md ./
+COPY agentpipe/ agentpipe/
+RUN pip install --no-cache-dir . fastapi uvicorn[standard] sse-starlette
 
 EXPOSE 8000
 

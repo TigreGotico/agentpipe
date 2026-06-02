@@ -2,8 +2,12 @@ __pycache__
 *.pyc
 .git
 .gitignore
-*.md
 docs/
 tests/
 examples/
 .venv
+Dockerfile
+docker-compose.yml
+*.md
+!README.md
+!SKILL.md
