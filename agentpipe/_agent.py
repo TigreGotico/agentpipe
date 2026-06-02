@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -35,6 +36,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from ._types import AgentEvent, GenerationResult, Provider
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CWD = os.environ.get("AGENTPIPE_CWD", "/tmp")
 
@@ -336,7 +339,8 @@ class Agent:
                 subscription_type=data.get("subscriptionType"),
                 raw=data,
             )
-        except (AgentProcessError, json.JSONDecodeError):
+        except (AgentProcessError, json.JSONDecodeError) as e:
+            logger.warning("Claude auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _gemini_auth_status(self) -> AuthStatus:
@@ -349,7 +353,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="gemini")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="gemini")
 
     async def _opencode_auth_status(self) -> AuthStatus:
@@ -363,7 +368,8 @@ class Agent:
             stdout, _stderr = await self.executor.run(spec)
             has_any = len(stdout.strip()) > 0
             return AuthStatus(authenticated=has_any, provider="opencode", raw=None)
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _gemini_list_sessions(self, cwd: str) -> list[SessionEntry]:
@@ -382,7 +388,8 @@ class Agent:
                 if line:
                     entries.append(SessionEntry(session_id=line, provider="gemini"))
             return entries
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini list sessions failed: %s", e)
             return []
 
     async def _opencode_list_sessions(self, cwd: str) -> list[SessionEntry]:
@@ -401,7 +408,8 @@ class Agent:
                 if line:
                     entries.append(SessionEntry(session_id=line, provider="opencode"))
             return entries
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode list sessions failed: %s", e)
             return []
 
     async def _opencode_list_models(self) -> list[ModelInfo]:
@@ -419,7 +427,8 @@ class Agent:
                 if line:
                     models.append(ModelInfo(id=line, provider="opencode"))
             return models
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode list models failed: %s", e)
             return []
 
     async def _opencode_stats(self, *, days: int | None = None, cwd: str) -> dict:
@@ -436,7 +445,8 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return {"raw": stdout}
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode stats failed: %s", e)
             return {"raw": ""}
 
     async def _claude_auth_login(self, *, method: str | None = None) -> AuthStatus:
@@ -447,7 +457,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="claude", method=method)
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude auth login failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _claude_auth_logout(self) -> AuthStatus:
@@ -460,7 +471,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=False, provider="claude")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude auth logout failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _opencode_auth_login(self) -> AuthStatus:
@@ -473,7 +485,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="opencode")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth login failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_auth_logout(self) -> AuthStatus:
@@ -486,7 +499,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=False, provider="opencode")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth logout failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_delete_session(self, session_id: str, cwd: str) -> bool:
@@ -500,7 +514,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode delete session '%s' failed: %s", session_id, e)
             return False
 
     async def _opencode_export_session(self, session_id: str, cwd: str) -> SessionExport:
@@ -514,7 +529,8 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return SessionExport(session_id=session_id, data=stdout, format="json")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode export session '%s' failed: %s", session_id, e)
             return SessionExport(session_id=session_id, data="", format="json")
 
     async def _opencode_import_session(self, data: str, cwd: str) -> str | None:
@@ -532,7 +548,8 @@ class Agent:
                 if line:
                     return line
             return None
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode import session failed: %s", e)
             return None
 
     async def _claude_mcp_add(
@@ -565,7 +582,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP add '%s' failed: %s", name, e)
             return False
 
     async def _claude_mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
@@ -576,7 +594,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP remove '%s' failed: %s", name, e)
             return False
 
     async def _claude_mcp_list(self) -> list[McpServerInfo]:
@@ -592,9 +611,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="claude"))
+                    servers.append(McpServerInfo(name=line))
             return servers
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP list failed: %s", e)
             return []
 
     async def _opencode_mcp_add(
@@ -621,7 +641,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP add '%s' failed: %s", name, e)
             return False
 
     async def _opencode_mcp_remove(self, name: str) -> bool:
@@ -634,7 +655,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP remove '%s' failed: %s", name, e)
             return False
 
     async def _opencode_mcp_list(self) -> list[McpServerInfo]:
@@ -650,9 +672,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="opencode"))
+                    servers.append(McpServerInfo(name=line))
             return servers
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP list failed: %s", e)
             return []
 
     async def _gemini_list_extensions(self) -> list[ExtensionInfo]:
@@ -668,9 +691,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line:
-                    extensions.append(ExtensionInfo(name=line, provider="gemini"))
+                    extensions.append(ExtensionInfo(name=line))
             return extensions
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini list extensions failed: %s", e)
             return []
 
     async def _claude_doctor(self) -> dict:
@@ -683,5 +707,6 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return {"raw": stdout}
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude doctor failed: %s", e)
             return {"raw": ""}
