@@ -4,6 +4,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/agentpipe)](https://pypi.org/project/agentpipe/)
 [![License](https://img.shields.io/github/license/TigreGotico/agentpipe)](LICENSE)
 [![CI](https://github.com/TigreGotico/agentpipe/actions/workflows/build-tests.yml/badge.svg?branch=dev)](https://github.com/TigreGotico/agentpipe/actions)
+[![DeepWiki](https://deepwiki.com/badge/TigreGotico/agentpipe)](https://deepwiki.com/repo/TigreGotico/agentpipe)
 
 **Let your expensive coding agent delegate the boring work to cheap ones.**
 
