@@ -592,7 +592,7 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="claude"))
+                    servers.append(McpServerInfo(name=line))
             return servers
         except AgentProcessError:
             return []
@@ -650,7 +650,7 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="opencode"))
+                    servers.append(McpServerInfo(name=line))
             return servers
         except AgentProcessError:
             return []
@@ -668,7 +668,7 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line:
-                    extensions.append(ExtensionInfo(name=line, provider="gemini"))
+                    extensions.append(ExtensionInfo(name=line))
             return extensions
         except AgentProcessError:
             return []
