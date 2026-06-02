@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from agentpipe._executor import AgentProcessError, AsyncSubprocessExecutor
 from agentpipe._types import CommandSpec
+
+_needs_311 = pytest.mark.skipif(
+    sys.version_info < (3, 11),
+    reason="asyncio.timeout requires Python 3.11+",
+)
 
 
 class TestAgentProcessError:
@@ -81,6 +87,7 @@ class TestAsyncSubprocessExecutorRun:
 
 
 class TestAsyncSubprocessExecutorRunStreaming:
+    @_needs_311
     @pytest.mark.asyncio
     async def test_streaming_success(self):
         executor = AsyncSubprocessExecutor()
@@ -94,6 +101,7 @@ class TestAsyncSubprocessExecutorRunStreaming:
         stdout_lines = [line for s, line in results if s == "stdout"]
         assert any("hello" in line for line in stdout_lines)
 
+    @_needs_311
     @pytest.mark.asyncio
     async def test_streaming_nonzero_exit(self):
         executor = AsyncSubprocessExecutor()
@@ -105,6 +113,7 @@ class TestAsyncSubprocessExecutorRunStreaming:
         assert exc_info.value.returncode == 1
         assert "err" in exc_info.value.stderr
 
+    @_needs_311
     @pytest.mark.asyncio
     async def test_streaming_without_stdin(self):
         executor = AsyncSubprocessExecutor()
@@ -117,6 +126,7 @@ class TestAsyncSubprocessExecutorRunStreaming:
         stdout = "".join(line for s, line in results if s == "stdout")
         assert "no stdin" in stdout
 
+    @_needs_311
     @pytest.mark.asyncio
     async def test_streaming_timeout(self):
         executor = AsyncSubprocessExecutor()
@@ -130,6 +140,7 @@ class TestAsyncSubprocessExecutorRunStreaming:
 
 
 class TestAsyncSubprocessExecutorCheckBinary:
+    @_needs_311
     @pytest.mark.asyncio
     async def test_check_binary_found(self):
         executor = AsyncSubprocessExecutor()
