@@ -1,6 +1,6 @@
 # agentpipe — agent onboarding
 
-Async Python wrapper for coding-agent CLIs (Claude Code, Gemini, Opencode). Own repo under `agents/`.
+Async Python wrapper for coding-agent CLIs (Aider, Claude Code, Gemini, Kilo Code, OpenCode, QoderCLI, Vibe). Own repo under `agents/`.
 
 ## Quick start
 
@@ -8,7 +8,7 @@ Async Python wrapper for coding-agent CLIs (Claude Code, Gemini, Opencode). Own 
 uv add agentpipe
 ```
 
-Provider CLIs (`claude`, `gemini`, `opencode`) must be installed and authenticated separately.
+Provider CLIs must be installed and authenticated separately (see README).
 
 ## Architecture
 
@@ -21,9 +21,13 @@ Provider CLIs (`claude`, `gemini`, `opencode`) must be installed and authenticat
 | Types | `agentpipe/_types.py` | Frozen dataclasses for events, results, command specs |
 | Pipeline | `agentpipe/_pipeline.py` | `fan_out`, `delegate`, `retry_until`, `map_concurrent` |
 | Provider base | `agentpipe/providers/_base.py` | `Provider` Protocol — shape every provider implements |
+| Aider | `agentpipe/providers/aider.py` | `AiderProvider` — `aider` CLI, plain text / tokens |
 | Claude | `agentpipe/providers/claude.py` | `ClaudeProvider` — `claude` CLI, stream-json format |
 | Gemini | `agentpipe/providers/gemini.py` | `GeminiProvider` — `gemini` CLI, stream-json format |
-| Opencode | `agentpipe/providers/opencode.py` | `OpencodeProvider` — `opencode run` CLI, JSON format |
+| Kilo | `agentpipe/providers/kilo.py` | `KiloProvider` — `kilo` CLI, JSON format |
+| OpenCode | `agentpipe/providers/opencode.py` | `OpencodeProvider` — `opencode run` CLI, JSON format |
+| QoderCLI | `agentpipe/providers/qoder.py` | `QoderProvider` — `qodercli` CLI, stream-json format |
+| Vibe | `agentpipe/providers/vibe.py` | `VibeProvider` — `vibe` CLI, NDJSON streaming format |
 
 ## Usage patterns
 
@@ -33,9 +37,22 @@ Provider CLIs (`claude`, `gemini`, `opencode`) must be installed and authenticat
 - **Delegation:** `await delegate(draft_agent, review_agent, "write", "review")` — draft then review.
 - **Fan-out:** `await fan_out(agent, ["prompt A", "prompt B"])` — semaphore-capped concurrency.
 
-## Key conventions
+## CI
 
-- `master` branch (no `dev` — single-commit repo). Follows [[gh-automations-conventions]] for release flow when a remote is added.
-- `pyproject.toml` at root — hatchling build, ruff lint (select `E,F,W,I,UP,…`), pytest + pytest-asyncio.
-- Tests in `tests/unit/` — mock the executor layer; no live CLI calls.
-- Use `tests/unit/providers/` for provider-specific tests once added.
+Full gh-automations CI set present (10 workflows). Pinned at `@dev`.
+
+## Conventions (org hard rules)
+
+- Branches: work on `dev`, stable on `master`; `dev` is the GitHub default. Never `main`.
+- Never edit `agentpipe/version.py`; gh-automations bumps semver from conventional-commit prefixes.
+- New repos are private by default.
+- Commit identity: JarbasAi <jarbasai@mailfence.com>.
+- Reference `OpenVoiceOS/gh-automations` reusable workflows at `@dev`.
+- No Neon / `neon-*` references. No meta-commentary in code/docs/commits/PRs.
+- Tests in `tests/` — mock the executor layer; no live CLI calls.
+
+## TODOs
+
+- Latest PyPI version: 0.1.0. Run `uv build && uv publish` to publish current code.
+- Requires `PYPI_TOKEN` secret on GitHub for automated publishing.
+- Set `dev` as default branch on GitHub.
