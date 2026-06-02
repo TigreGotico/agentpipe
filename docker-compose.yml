@@ -7,22 +7,18 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount your working directory so agents can read/write files
       - .:/workspace
-      # Persist auth state across restarts
+      # Provider auth state (persists login sessions)
       - ~/.local/share/kilo:/root/.local/share/kilo
       - ~/.config/opencode:/root/.config/opencode
       - ~/.claude:/root/.claude
       - ~/.config/gemini:/root/.config/gemini
       - ~/.vibe:/root/.vibe
     environment:
-      # Agentpipe settings
       - AGENTPIPE_CWD=/workspace
-      # API keys — set these in a .env file or shell env
+      # API keys — set in .env or shell env
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
-      # Kilo Code uses the .env file or kilo auth login
-      - KILO_SERVER_PASSWORD=${KILO_SERVER_PASSWORD:-}
     restart: unless-stopped

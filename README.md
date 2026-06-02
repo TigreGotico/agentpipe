@@ -200,8 +200,9 @@ curl http://localhost:8000/agents/writer/session
 
 ### Docker
 
-The container includes all 6 provider CLIs (kilo, opencode, claude,
-gemini, aider, vibe) plus agentpipe itself. Image published to
+The container bundles 6 provider CLIs (kilo, opencode, gemini, aider,
+vibe, qodercli) — free-tier models work out of the box. Claude Code
+requires manual install (see docs). Image published to
 `ghcr.io/tigregotico/agentpipe:latest`.
 
 ```bash

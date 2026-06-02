@@ -114,9 +114,11 @@ curl http://localhost:8000/health
 
 ## Docker
 
-The container includes **all 6 provider CLIs** (kilo, opencode, claude,
-gemini, aider, vibe) plus agentpipe itself. On startup it checks what's
-installed and what auth is configured.
+The container bundles **6 provider CLIs** (kilo, opencode, gemini, aider,
+vibe, qodercli) — all ready to use without any auth setup for their
+free-tier models. **Claude Code** is **not pre-installed** (install
+manually, see below). On startup it checks what's available and what
+auth is configured.
 
 ### Quick start
 
@@ -132,6 +134,12 @@ docker compose up
 The image is auto-built and published to `ghcr.io/tigregotico/agentpipe:latest`
 on every push to `dev`.
 
+### Free-tier: no auth needed
+
+**kilo** and **opencode** work immediately with their free-tier default
+models (`kilo/kilo-auto/free` and `opencode/big-pickle`). No API keys,
+no accounts. Just `docker compose up` and use them.
+
 ### API keys
 
 Keys can be set via environment variables (in a `.env` file or shell):
@@ -143,10 +151,13 @@ Keys can be set via environment variables (in a `.env` file or shell):
 | `OPENAI_API_KEY` | qoder, aider | Optional |
 | `MISTRAL_API_KEY` | vibe | For Mistral Vibe |
 
-### Auth persistence
+### Auth persistence (optional)
 
-CLI auth state (login sessions) is stored on your host and mounted into
-the container so it survives restarts:
+Only needed if you want to use authenticated/pro features. Free-tier
+models on kilo/opencode work without any of this.
+
+CLI auth state can be persisted by mounting host directories into the
+container:
 
 | Host path | Container path | Provider |
 |-----------|---------------|----------|
@@ -156,14 +167,27 @@ the container so it survives restarts:
 | `~/.config/gemini/` | `/root/.config/gemini/` | Gemini CLI |
 | `~/.vibe/` | `/root/.vibe/` | Mistral Vibe |
 
-To set up auth interactively, run a one-time setup:
+To run interactive auth setup:
 
 ```bash
 docker compose run --rm agentpipe kilo auth login
 docker compose run --rm agentpipe claude auth login
 ```
 
-These login sessions persist in the mounted volumes.
+### Claude Code (manual install)
+
+Claude Code requires a Cloudflare-gated installer and Anthropic auth,
+so it's not pre-installed. To add it:
+
+```bash
+# Run the installer inside the container
+docker compose run --rm agentpipe bash -c "curl -fsSL https://claude.ai/install | bash"
+
+# Then authenticate
+docker compose run --rm agentpipe claude auth login
+```
+
+The `~/.claude/` mount in `docker-compose.yml` persists the session.
 
 ### Working directory
 

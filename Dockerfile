@@ -1,14 +1,22 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Install Node.js for npm-based CLIs (kilo, opencode, claude, gemini)
+# Install Node.js for npm-based CLIs (kilo, gemini, qoder)
 RUN apt-get update -qq && apt-get install -y -qq curl gnupg ca-certificates \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y -qq nodejs git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install all provider CLIs
-RUN npm install -g @kilocode/cli opencode @anthropics/claude-code 2>&1 | tail -3
-RUN pip install --quiet aider-chat mistral-vibe
+# Install npm-based provider CLIs
+RUN npm install -g @kilocode/cli @google/gemini-cli @qoder-ai/qodercli
+
+# Install opencode (Go binary from GitHub releases)
+RUN curl -fsSL https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz \
+    | tar xz -C /usr/local/bin opencode
+
+# Install pip-based provider CLIs (aider-chat supports python 3.10-3.12)
+RUN pip install --quiet aider-chat
+# mistral-vibe requires python >=3.12
+RUN pip install --quiet mistral-vibe
 
 # Install agentpipe from local source
 WORKDIR /app
