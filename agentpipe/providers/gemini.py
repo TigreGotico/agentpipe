@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import threading
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,6 +12,7 @@ from .._types import (
     ToolCallEvent,
     ToolResultEvent,
 )
+from ._utils import ToolTracker
 
 _GeminiParsedEvent = "_GeminiInitEvent | _GeminiMessageEvent | _GeminiToolUseEvent | _GeminiToolResultEvent | None"
 
@@ -106,9 +107,7 @@ class GeminiProvider:
         self._allowed_tools = allowed_tools
         self._raw_output = raw_output
         self._extensions = extensions
-        self._tool_map: dict[str, str] = {}
-        self._tool_start_times: dict[str, float] = {}
-        self._tool_lock: threading.Lock = threading.Lock()
+        self._tools = ToolTracker(thread_safe=True)
         self._assistant_turns: int = 0
 
     @property
@@ -161,8 +160,6 @@ class GeminiProvider:
         if not stripped:
             return []
 
-        import time
-
         parsed = _parse_gemini_line(stripped)
         if parsed is None:
             return [ThinkingEvent(text=stripped)]
@@ -175,9 +172,7 @@ class GeminiProvider:
 
         if isinstance(parsed, _GeminiToolUseEvent):
             if parsed.tool_id:
-                with self._tool_lock:
-                    self._tool_map[parsed.tool_id] = parsed.tool_name
-                    self._tool_start_times[parsed.tool_id] = time.monotonic()
+                self._tools.record(parsed.tool_id, parsed.tool_name)
             return [
                 ToolCallEvent(
                     tool=parsed.tool_name,
@@ -187,15 +182,12 @@ class GeminiProvider:
             ]
 
         if isinstance(parsed, _GeminiToolResultEvent):
-            with self._tool_lock:
-                tool_name = self._tool_map.get(parsed.tool_id or "", "Tool")
-                start = self._tool_start_times.get(parsed.tool_id or "")
-            duration_ms = ((time.monotonic() - start) * 1000) if start else None
+            base = self._tools.resolve(parsed.tool_id)
             return [
                 ToolResultEvent(
-                    tool=tool_name,
+                    tool=base.tool,
                     output=parsed.output,
-                    duration_ms=duration_ms,
+                    duration_ms=base.duration_ms,
                 )
             ]
 
@@ -223,8 +215,6 @@ class GeminiProvider:
         return "".join(text_parts).strip()
 
     def build_env(self) -> dict[str, str]:
-        import os
-
         env = dict(os.environ)
         env.setdefault("GEMINI_CLI_TRUST_WORKSPACE", "true")
         return env
