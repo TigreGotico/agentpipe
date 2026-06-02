@@ -114,29 +114,68 @@ curl http://localhost:8000/health
 
 ## Docker
 
-The image is auto-built on every push to `dev` and published to
-`ghcr.io/tigregotico/agentpipe:latest`. Pull it directly:
+The container includes **all 6 provider CLIs** (kilo, opencode, claude,
+gemini, aider, vibe) plus agentpipe itself. On startup it checks what's
+installed and what auth is configured.
+
+### Quick start
 
 ```bash
-docker pull ghcr.io/tigregotico/agentpipe:latest
-```
+# First run — create a .env file with your API keys
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 
-Or use docker-compose (pulls automatically):
-
-```bash
+# Start the server
 docker compose up
 ```
 
-Pass API keys via environment:
+The image is auto-built and published to `ghcr.io/tigregotico/agentpipe:latest`
+on every push to `dev`.
+
+### API keys
+
+Keys can be set via environment variables (in a `.env` file or shell):
+
+| Variable | Providers | Required? |
+|----------|-----------|-----------|
+| `OPENROUTER_API_KEY` | aider, kilo, opencode (free models) | Recommended |
+| `ANTHROPIC_API_KEY` | claude | For Claude |
+| `OPENAI_API_KEY` | qoder, aider | Optional |
+| `MISTRAL_API_KEY` | vibe | For Mistral Vibe |
+
+### Auth persistence
+
+CLI auth state (login sessions) is stored on your host and mounted into
+the container so it survives restarts:
+
+| Host path | Container path | Provider |
+|-----------|---------------|----------|
+| `~/.local/share/kilo/` | `/root/.local/share/kilo/` | Kilo Code |
+| `~/.config/opencode/` | `/root/.config/opencode/` | OpenCode |
+| `~/.claude/` | `/root/.claude/` | Claude Code |
+| `~/.config/gemini/` | `/root/.config/gemini/` | Gemini CLI |
+| `~/.vibe/` | `/root/.vibe/` | Mistral Vibe |
+
+To set up auth interactively, run a one-time setup:
 
 ```bash
-OPENROUTER_API_KEY=sk-xxx ANTHROPIC_API_KEY=sk-ant-xxx docker compose up
+docker compose run --rm agentpipe kilo auth login
+docker compose run --rm agentpipe claude auth login
 ```
 
-The Docker image includes agentpipe, FastAPI, uvicorn, and sse-starlette.
-Provider CLIs are not included — the container delegates to the host's
-installed CLIs via the mounted `/tmp` volume, or you can extend the
-Dockerfile to install them.
+These login sessions persist in the mounted volumes.
+
+### Working directory
+
+Your current directory is mounted at `/workspace` inside the container.
+Set `AGENTPIPE_CWD=/workspace` to have agents operate on your project files.
+
+### Build locally
+
+```bash
+docker compose build
+docker compose up
+```
 
 ## Configuration Fields
 

@@ -200,21 +200,27 @@ curl http://localhost:8000/agents/writer/session
 
 ### Docker
 
-The image is auto-built on every push to `dev` and published to
+The container includes all 6 provider CLIs (kilo, opencode, claude,
+gemini, aider, vibe) plus agentpipe itself. Image published to
 `ghcr.io/tigregotico/agentpipe:latest`.
 
 ```bash
-# Pull the published image
+# Create a .env file with API keys
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+
+# Start
 docker compose up
-
-# Or build locally
-docker compose build
-
-# Pass API keys
-# OPENROUTER_API_KEY=sk-xxx docker compose up
 ```
 
-See the [server module](agentpipe/server.py) for the full API.
+API keys, auth persistence, and working directory are handled via
+[volume mounts and env vars](docs/server.md#docker) configured in
+`docker-compose.yml`. To set up interactive CLI auth:
+
+```bash
+docker compose run --rm agentpipe kilo auth login
+```
+
+See the [Docker docs](docs/server.md#docker) and [server module](agentpipe/server.py) for details.
 
 ## Docs
 

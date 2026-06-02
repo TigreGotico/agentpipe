@@ -11,3 +11,4 @@ docker-compose.yml
 *.md
 !README.md
 !SKILL.md
+.env
