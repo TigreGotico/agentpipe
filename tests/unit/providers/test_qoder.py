@@ -201,7 +201,7 @@ class TestQoderParseEventLine:
 
     def test_tool_result_event(self):
         p = QoderProvider()
-        p._tool_map["t1"] = "Read"
+        p._tools._map["t1"] = "Read"
         line = json.dumps({"type": "tool_result", "output": "contents", "tool_use_id": "t1"})
         events = p.parse_event_line(line)
         assert len(events) == 1

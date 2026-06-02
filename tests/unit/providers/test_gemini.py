@@ -150,7 +150,7 @@ class TestGeminiParseEventLine:
 
     def test_tool_result_event(self):
         p = GeminiProvider()
-        p._tool_map["t1"] = "Read"
+        p._tools._map["t1"] = "Read"
         events = p.parse_event_line(json.dumps({"type": "tool_result", "output": "data", "tool_id": "t1"}))
         assert isinstance(events[0], ToolResultEvent)
         assert events[0].tool == "Read"
