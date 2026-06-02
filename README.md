@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/github/license/TigreGotico/agentpipe)](LICENSE)
 [![CI](https://github.com/TigreGotico/agentpipe/actions/workflows/build-tests.yml/badge.svg?branch=dev)](https://github.com/TigreGotico/agentpipe/actions)
 [![DeepWiki](https://deepwiki.com/badge/TigreGotico/agentpipe)](https://deepwiki.com/repo/TigreGotico/agentpipe)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/TigreGotico/agentpipe/pkgs/container/agentpipe)
 
 **Let your expensive coding agent delegate the boring work to cheap ones.**
 
@@ -199,9 +200,17 @@ curl http://localhost:8000/agents/writer/session
 
 ### Docker
 
+The image is auto-built on every push to `dev` and published to
+`ghcr.io/tigregotico/agentpipe:latest`.
+
 ```bash
+# Pull the published image
 docker compose up
-# Or pass API keys:
+
+# Or build locally
+docker compose build
+
+# Pass API keys
 # OPENROUTER_API_KEY=sk-xxx docker compose up
 ```
 

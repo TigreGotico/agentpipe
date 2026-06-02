@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   agentpipe:
+    # Build locally, or pull from GitHub Container Registry
     build: .
+    image: ghcr.io/tigregotico/agentpipe:latest
     ports:
       - "8000:8000"
     volumes:
