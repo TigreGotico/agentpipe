@@ -114,6 +114,15 @@ curl http://localhost:8000/health
 
 ## Docker
 
+The image is auto-built on every push to `dev` and published to
+`ghcr.io/tigregotico/agentpipe:latest`. Pull it directly:
+
+```bash
+docker pull ghcr.io/tigregotico/agentpipe:latest
+```
+
+Or use docker-compose (pulls automatically):
+
 ```bash
 docker compose up
 ```
@@ -125,9 +134,9 @@ OPENROUTER_API_KEY=sk-xxx ANTHROPIC_API_KEY=sk-ant-xxx docker compose up
 ```
 
 The Docker image includes agentpipe, FastAPI, uvicorn, and sse-starlette.
-Provider CLIs are not included — the Docker container delegates to the
-host's installed CLIs via the mounted `/tmp` volume, or you can extend
-the Dockerfile to install them.
+Provider CLIs are not included — the container delegates to the host's
+installed CLIs via the mounted `/tmp` volume, or you can extend the
+Dockerfile to install them.
 
 ## Configuration Fields
 
