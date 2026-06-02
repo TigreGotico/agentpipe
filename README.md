@@ -9,6 +9,9 @@
 
 **Let your expensive coding agent delegate the boring work to cheap ones.**
 
+We vibe-coded this so your agents can delegate to other agents who delegate to
+other agents — recursive delegation all the way down, just like we did. 🌀
+
 agentpipe gives you a single async Python API over 7 coding agent CLIs (Aider,
 Claude Code, Gemini CLI, Kilo Code, OpenCode, QoderCLI, Vibe). Use it to build
 multi-agent pipelines where a smart planner delegates tasks to cheaper workers.

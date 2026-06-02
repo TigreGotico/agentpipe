@@ -148,7 +148,7 @@ class VibeProvider:
             cmd.extend(["--agent", agent_name])
         effective_model = model or self._model
         if effective_model:
-            pass
+            cmd.extend(["--model", effective_model])
         if self._sandbox:
             cmd.append("--sandbox")
         if self._include_dirs:

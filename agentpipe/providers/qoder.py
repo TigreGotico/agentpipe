@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from typing import Any
 
 from .._types import (
@@ -80,6 +81,7 @@ class QoderProvider:
         self._json_schema = json_schema
         self._tool_map: dict[str, str] = {}
         self._tool_start_times: dict[str, float] = {}
+        self._tool_lock: threading.Lock = threading.Lock()
 
     @property
     def binary_name(self) -> str:
@@ -213,8 +215,9 @@ class QoderProvider:
             tool_id = data.get("id", data.get("tool_id"))
             params = data.get("input", data.get("parameters"))
             if tool_id:
-                self._tool_map[tool_id] = tool_name
-                self._tool_start_times[tool_id] = time.monotonic()
+                with self._tool_lock:
+                    self._tool_map[tool_id] = tool_name
+                    self._tool_start_times[tool_id] = time.monotonic()
             return [
                 ToolCallEvent(
                     tool=tool_name,
@@ -228,8 +231,9 @@ class QoderProvider:
             if isinstance(output, list):
                 output = "\n".join(str(item) for item in output)
             tool_id = data.get("tool_use_id", data.get("tool_id"))
-            tool_name = self._tool_map.get(tool_id or "", "Tool")
-            start = self._tool_start_times.get(tool_id or "")
+            with self._tool_lock:
+                tool_name = self._tool_map.get(tool_id or "", "Tool")
+                start = self._tool_start_times.get(tool_id or "")
             duration_ms = ((time.monotonic() - start) * 1000) if start else None
             return [
                 ToolResultEvent(

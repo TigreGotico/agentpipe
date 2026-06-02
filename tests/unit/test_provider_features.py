@@ -1022,12 +1022,14 @@ class TestAiderProviderConstruction:
         cmd = p.build_command("test")
         assert "--auto-test" in cmd
 
-    def test_api_key_flag(self):
+    def test_api_key_env(self):
         from agentpipe.providers.aider import AiderProvider
 
         p = AiderProvider(api_key=["anthropic=sk-ant-xxx", "openai=sk-xxx"])
-        cmd = p.build_command("test")
-        assert cmd.count("--api-key") == 2
+        env = p.build_env()
+        assert env.get("AIDER_ANTHROPIC_API_KEY") == "sk-ant-xxx"
+        assert env.get("AIDER_OPENAI_API_KEY") == "sk-xxx"
+        assert "--api-key" not in p.build_command("test")
 
     def test_set_env_flag(self):
         from agentpipe.providers.aider import AiderProvider

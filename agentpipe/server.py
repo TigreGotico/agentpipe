@@ -59,6 +59,7 @@ class _ManagedAgent:
 
 
 _agents: dict[str, _ManagedAgent] = {}
+_MAX_AGENTS = 100
 
 
 class AgentConfig(BaseModel):
@@ -143,6 +144,8 @@ async def create_agent(req: CreateAgentRequest) -> AgentInfo:
     name = req.name or f"agent-{uuid4().hex[:8]}"
     if name in _agents:
         raise HTTPException(409, f"Agent '{name}' already exists")
+    if len(_agents) >= _MAX_AGENTS:
+        raise HTTPException(503, "Agent store full")
     agent = _build_agent(name, req)
     _agents[name] = _ManagedAgent(agent=agent)
     logger.info("Created agent '%s' (provider=%s, model=%s)", name, req.provider, agent.model)
@@ -318,6 +321,8 @@ async def openai_chat_completions(body: dict):
     provider = _model_to_provider(model)
 
     if agent_name not in _agents:
+        if len(_agents) >= _MAX_AGENTS:
+            raise HTTPException(503, "Agent store full")
         _agents[agent_name] = _ManagedAgent(agent=Agent(provider, model=model))
         logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
 

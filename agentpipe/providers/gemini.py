@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -107,6 +108,7 @@ class GeminiProvider:
         self._extensions = extensions
         self._tool_map: dict[str, str] = {}
         self._tool_start_times: dict[str, float] = {}
+        self._tool_lock: threading.Lock = threading.Lock()
         self._assistant_turns: int = 0
 
     @property
@@ -173,8 +175,9 @@ class GeminiProvider:
 
         if isinstance(parsed, _GeminiToolUseEvent):
             if parsed.tool_id:
-                self._tool_map[parsed.tool_id] = parsed.tool_name
-                self._tool_start_times[parsed.tool_id] = time.monotonic()
+                with self._tool_lock:
+                    self._tool_map[parsed.tool_id] = parsed.tool_name
+                    self._tool_start_times[parsed.tool_id] = time.monotonic()
             return [
                 ToolCallEvent(
                     tool=parsed.tool_name,
@@ -184,8 +187,9 @@ class GeminiProvider:
             ]
 
         if isinstance(parsed, _GeminiToolResultEvent):
-            tool_name = self._tool_map.get(parsed.tool_id or "", "Tool")
-            start = self._tool_start_times.get(parsed.tool_id or "")
+            with self._tool_lock:
+                tool_name = self._tool_map.get(parsed.tool_id or "", "Tool")
+                start = self._tool_start_times.get(parsed.tool_id or "")
             duration_ms = ((time.monotonic() - start) * 1000) if start else None
             return [
                 ToolResultEvent(

@@ -36,29 +36,31 @@ class AsyncSubprocessExecutor:
         )
 
         if process.stdin is not None:
-            process.stdin.write(spec.stdin.encode())
+            if spec.stdin:
+                await process.stdin.write(spec.stdin.encode())
+                await process.stdin.drain()
             process.stdin.close()
 
         assert process.stdout is not None
         assert process.stderr is not None
 
-        stdout_lines: list[str] = []
         stderr_lines: list[str] = []
 
         try:
             async with asyncio.timeout(spec.timeout):
 
-                async def read_stdout() -> None:
-                    async for line in process.stdout:
-                        decoded = line.decode() if isinstance(line, bytes) else line
-                        stdout_lines.append(decoded)
-
-                async def read_stderr() -> None:
+                async def forward_stderr() -> None:
                     async for line in process.stderr:
                         decoded = line.decode() if isinstance(line, bytes) else line
                         stderr_lines.append(decoded)
 
-                await asyncio.gather(read_stdout(), read_stderr())
+                stderr_task = asyncio.create_task(forward_stderr())
+
+                async for line in process.stdout:
+                    decoded = line.decode() if isinstance(line, bytes) else line
+                    yield ("stdout", decoded)
+
+                await stderr_task
                 await process.wait()
         except TimeoutError:
             try:
@@ -83,8 +85,6 @@ class AsyncSubprocessExecutor:
                 spec.argv,
             )
 
-        for line in stdout_lines:
-            yield ("stdout", line)
         for line in stderr_lines:
             yield ("stderr", line)
 

@@ -28,6 +28,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -167,6 +168,13 @@ MODEL_PROVIDER_MAP: dict[str, str] = {
     "gemini-2.5-pro": "gemini",
 }
 
+async def _call_on_attempt(callback: callable, attempt: CascadeAttempt) -> None:
+    if inspect.iscoroutinefunction(callback):
+        await callback(attempt)
+    else:
+        callback(attempt)
+
+
 _FREE_MODELS: frozenset[str] = frozenset(
     {
         "opencode/big-pickle",
@@ -270,7 +278,7 @@ async def cascade(
 
             attempts.append(attempt)
             if on_attempt:
-                on_attempt(attempt)
+                await _call_on_attempt(on_attempt, attempt)
 
             return CascadeResult(
                 text=result.text,
@@ -291,7 +299,7 @@ async def cascade(
                 attempt.error_message = e.stderr[:200] if e.stderr else "rate limited"
                 attempts.append(attempt)
                 if on_attempt:
-                    on_attempt(attempt)
+                    await _call_on_attempt(on_attempt, attempt)
 
                 backoff = rate_info.get("resets_in_seconds") or rate_limit_backoff_seconds
                 await asyncio.sleep(min(backoff, rate_limit_backoff_seconds))
@@ -301,7 +309,7 @@ async def cascade(
             attempt.error_message = str(e)[:200]
             attempts.append(attempt)
             if on_attempt:
-                on_attempt(attempt)
+                await _call_on_attempt(on_attempt, attempt)
 
             await asyncio.sleep(retry_delay_seconds)
             continue
@@ -312,7 +320,7 @@ async def cascade(
             attempt.error_message = f"timed out after {per_attempt_timeout}s"
             attempts.append(attempt)
             if on_attempt:
-                on_attempt(attempt)
+                await _call_on_attempt(on_attempt, attempt)
 
             await asyncio.sleep(retry_delay_seconds)
             continue
@@ -323,7 +331,7 @@ async def cascade(
             attempt.error_message = f"{type(e).__name__}: {str(e)[:200]}"
             attempts.append(attempt)
             if on_attempt:
-                on_attempt(attempt)
+                await _call_on_attempt(on_attempt, attempt)
 
             await asyncio.sleep(retry_delay_seconds)
             continue

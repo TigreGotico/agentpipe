@@ -10,6 +10,7 @@ from ._session import AgentSession
 from ._types import (
     ApprovalMode,
     AuthStatus,
+    CommandSpec,
     EffortLevel,
     ExtensionInfo,
     McpServerConfig,
@@ -183,8 +184,9 @@ class Agent:
         cwd: str | None = None,
         timeout: int | None = None,
     ) -> AsyncIterator[AgentEvent]:
-        session = self.session(cwd=cwd, timeout=timeout)
-        return session.generate_stream(prompt)
+        async with self.session(cwd=cwd, timeout=timeout) as session:
+            async for event in session.generate_stream(prompt):
+                yield event
 
     async def generate_full(
         self,
@@ -317,8 +319,6 @@ class Agent:
         raise NotImplementedError(f"stats not supported for {self.provider}")
 
     async def _claude_auth_status(self) -> AuthStatus:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "auth", "status", "--json"],
             stdin="",
@@ -340,8 +340,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _gemini_auth_status(self) -> AuthStatus:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "--version"],
             stdin="",
@@ -355,8 +353,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="gemini")
 
     async def _opencode_auth_status(self) -> AuthStatus:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "providers", "list"],
             stdin="",
@@ -371,8 +367,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _gemini_list_sessions(self, cwd: str) -> list[SessionEntry]:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "--list-sessions"],
             stdin="",
@@ -392,8 +386,6 @@ class Agent:
             return []
 
     async def _opencode_list_sessions(self, cwd: str) -> list[SessionEntry]:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "session", "list"],
             stdin="",
@@ -413,8 +405,6 @@ class Agent:
             return []
 
     async def _opencode_list_models(self) -> list[ModelInfo]:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "models"],
             stdin="",
@@ -433,8 +423,6 @@ class Agent:
             return []
 
     async def _opencode_stats(self, *, days: int | None = None, cwd: str) -> dict:
-        from ._types import CommandSpec
-
         cmd = [self._provider_instance.binary_name, "stats"]
         if days is not None:
             cmd.extend(["--days", str(days)])
@@ -452,8 +440,6 @@ class Agent:
             return {"raw": ""}
 
     async def _claude_auth_login(self, *, method: str | None = None) -> AuthStatus:
-        from ._types import CommandSpec
-
         cmd = [self._provider_instance.binary_name, "auth", "login"]
         if method:
             cmd.extend([f"--{method}"])
@@ -465,8 +451,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _claude_auth_logout(self) -> AuthStatus:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "auth", "logout"],
             stdin="",
@@ -480,8 +464,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _opencode_auth_login(self) -> AuthStatus:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "providers", "login"],
             stdin="",
@@ -495,8 +477,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_auth_logout(self) -> AuthStatus:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "providers", "logout"],
             stdin="",
@@ -510,8 +490,6 @@ class Agent:
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_delete_session(self, session_id: str, cwd: str) -> bool:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "session", "delete", session_id],
             stdin="",
@@ -526,8 +504,6 @@ class Agent:
             return False
 
     async def _opencode_export_session(self, session_id: str, cwd: str) -> SessionExport:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "export", session_id, "--format", "json"],
             stdin="",
@@ -542,8 +518,6 @@ class Agent:
             return SessionExport(session_id=session_id, data="", format="json")
 
     async def _opencode_import_session(self, data: str, cwd: str) -> str | None:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "import", "-"],
             stdin=data,
@@ -572,8 +546,6 @@ class Agent:
         headers: dict[str, str] | None = None,
         scope: str | None = None,
     ) -> bool:
-        from ._types import CommandSpec
-
         if url:
             cmd = [self._provider_instance.binary_name, "mcp", "add", name, "-t", "sse", "--url", url]
             if headers:
@@ -597,8 +569,6 @@ class Agent:
             return False
 
     async def _claude_mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
-        from ._types import CommandSpec
-
         cmd = [self._provider_instance.binary_name, "mcp", "remove", name]
         if scope:
             cmd.extend(["--scope", scope])
@@ -610,8 +580,6 @@ class Agent:
             return False
 
     async def _claude_mcp_list(self) -> list[McpServerInfo]:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "mcp", "list"],
             stdin="",
@@ -638,8 +606,6 @@ class Agent:
         args: list[str] | None = None,
         env: dict[str, str] | None = None,
     ) -> bool:
-        from ._types import CommandSpec
-
         if url:
             cmd = [self._provider_instance.binary_name, "mcp", "add", name, "-t", "sse", "--url", url]
         elif command:
@@ -659,8 +625,6 @@ class Agent:
             return False
 
     async def _opencode_mcp_remove(self, name: str) -> bool:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "mcp", "remove", name],
             stdin="",
@@ -674,8 +638,6 @@ class Agent:
             return False
 
     async def _opencode_mcp_list(self) -> list[McpServerInfo]:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "mcp", "list"],
             stdin="",
@@ -694,8 +656,6 @@ class Agent:
             return []
 
     async def _gemini_list_extensions(self) -> list[ExtensionInfo]:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "extensions", "list"],
             stdin="",
@@ -714,8 +674,6 @@ class Agent:
             return []
 
     async def _claude_doctor(self) -> dict:
-        from ._types import CommandSpec
-
         spec = CommandSpec(
             argv=[self._provider_instance.binary_name, "doctor"],
             stdin="",

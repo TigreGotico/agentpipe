@@ -60,14 +60,14 @@ async def retry_until(
     cwd: str | None = None,
     timeout: int = 300,
 ) -> str:
-    session = agent.session(cwd=cwd, timeout=timeout)
-    result = await session.generate(prompt)
-
-    for _attempt in range(1, max_attempts):
+    for attempt in range(max_attempts):
+        session = agent.session(cwd=cwd, timeout=timeout)
+        current_prompt = prompt if attempt == 0 else (
+            refine_prompt or "The previous result was not satisfactory. Please try again, fixing any issues."
+        )
+        result = await session.generate(current_prompt)
         if validator(result):
             return result
-        follow_up = refine_prompt or "The previous result was not satisfactory. Please try again, fixing any issues."
-        result = await session.generate(follow_up)
 
     return result
 
@@ -76,11 +76,15 @@ async def map_concurrent(
     agents: Sequence[Agent],
     prompt: str,
     *,
+    max_concurrency: int = 5,
     cwd: str | None = None,
     timeout: int = 300,
 ) -> list[str]:
+    sem = asyncio.Semaphore(max_concurrency)
+
     async def _run(agent: Agent) -> str:
-        session = agent.session(cwd=cwd, timeout=timeout)
-        return await session.generate(prompt)
+        async with sem:
+            session = agent.session(cwd=cwd, timeout=timeout)
+            return await session.generate(prompt)
 
     return list(await asyncio.gather(*(_run(a) for a in agents)))

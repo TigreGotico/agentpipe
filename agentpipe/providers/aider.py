@@ -193,8 +193,6 @@ class AiderProvider:
             cmd.append("--no-auto-lint")
         if self._auto_test:
             cmd.append("--auto-test")
-        for ak in self._api_key:
-            cmd.extend(["--api-key", ak])
         for se in self._set_env:
             cmd.extend(["--set-env", se])
         if self._api_timeout is not None:
@@ -231,4 +229,9 @@ class AiderProvider:
     def build_env(self) -> dict[str, str]:
         import os
 
-        return dict(os.environ)
+        env = dict(os.environ)
+        for ak in self._api_key:
+            if "=" in ak:
+                provider, key_value = ak.split("=", 1)
+                env[f"AIDER_{provider.upper()}_API_KEY"] = key_value
+        return env
