@@ -1,15 +1,23 @@
 """FastAPI server — expose multiple agentpipe agents behind HTTP with persistent sessions.
 
+Includes an OpenAI-compatible /v1/chat/completions endpoint so any OpenAI client
+can be pointed at this server.
+
 Usage:
     pip install fastapi uvicorn sse-starlette
     python -m agentpipe.server
 
 Then:
+    # Native API
     curl -X POST http://localhost:8000/agents -H 'Content-Type: application/json' \
       -d '{"name":"writer","provider":"kilo"}'
     curl -X POST http://localhost:8000/agents/writer/generate \
       -H 'Content-Type: application/json' -d '{"prompt":"Write a poem"}'
-    curl http://localhost:8000/agents/writer/session
+
+    # OpenAI-compatible — use with any OpenAI client
+    curl http://localhost:8000/v1/chat/completions \
+      -H 'Content-Type: application/json' \
+      -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Hello"}]}'
 """
 
 from __future__ import annotations
@@ -17,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
@@ -267,6 +276,127 @@ async def get_session(name: str) -> dict:
     return {"name": name, "session_id": ma.session_id}
 
 
+def _model_to_provider(model: str) -> str:
+    prefix = model.split("/")[0].lower()
+    known: dict[str, str] = {
+        "aider": "aider",
+        "claude": "claude",
+        "gemini": "gemini",
+        "kilo": "kilo",
+        "opencode": "opencode",
+        "qoder": "qoder",
+        "vibe": "vibe",
+    }
+    return known.get(prefix, "kilo")
+
+
+def _messages_to_prompt(messages: list[dict]) -> str:
+    parts: list[str] = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            texts = [c["text"] for c in content if c.get("type") == "text"]
+            content = "\n".join(texts)
+        if role == "system":
+            parts.append(f"System: {content}")
+        elif role == "user":
+            parts.append(f"User: {content}")
+        elif role == "assistant":
+            parts.append(f"Assistant: {content}")
+    return "\n".join(parts)
+
+
+@app.post("/v1/chat/completions")
+async def openai_chat_completions(body: dict):
+    model = body.get("model", "kilo/kilo-auto/free")
+    messages = body.get("messages", [])
+    stream = body.get("stream", False)
+    user_id = body.get("user", "")
+
+    agent_name = user_id or model.replace("/", "-").replace(":", "-")
+    provider = _model_to_provider(model)
+
+    if agent_name not in _agents:
+        _agents[agent_name] = _ManagedAgent(agent=Agent(provider, model=model))
+        logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
+
+    ma = _agents[agent_name]
+    prompt = _messages_to_prompt(messages)
+
+    if stream:
+        return await _openai_stream(ma, prompt, model)
+    return await _openai_complete(ma, prompt, model)
+
+
+async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
+    async with ma.lock:
+        if ma.session_id:
+            ma.agent.continue_last = True
+        result = await ma.agent.generate_full(prompt)
+        if result.session_id:
+            ma.session_id = result.session_id
+
+    usage = result.usage or UsageEvent()
+    return {
+        "id": f"chatcmpl-{result.session_id or uuid4().hex}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": result.text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage.input_tokens,
+            "completion_tokens": usage.output_tokens,
+            "total_tokens": usage.input_tokens + usage.output_tokens,
+        },
+    }
+
+
+async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
+    if EventSourceResponse is None:
+        raise HTTPException(500, "sse-starlette not installed (pip install sse-starlette)")
+
+    async def event_generator():
+        async with ma.lock:
+            if ma.session_id:
+                ma.agent.continue_last = True
+
+            session = ma.agent.session()
+            try:
+                async with session as sess:
+                    async for event in sess.generate_stream(prompt):
+                        if isinstance(event, ThinkingEvent) and event.text:
+                            chunk = {
+                                "id": "chatcmpl-stream",
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "model": model,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"content": event.text},
+                                        "finish_reason": None,
+                                    }
+                                ],
+                            }
+                            yield {"event": "data", "data": json.dumps(chunk)}
+                    if sess.session_id:
+                        ma.session_id = sess.session_id
+            except Exception as e:
+                logger.exception("Stream failed")
+                yield {"event": "data", "data": json.dumps({"error": str(e)})}
+
+        yield {"event": "data", "data": "[DONE]"}
+
+    return EventSourceResponse(event_generator())
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "agents": len(_agents)}
@@ -274,7 +404,7 @@ async def health():
 
 @app.get("/", response_class=PlainTextResponse)
 async def root():
-    return """agentpipe server — Multi-agent HTTP API
+    return """agentpipe server — Multi-agent HTTP API with OpenAI compatibility
 
 Endpoints:
   POST /agents                          Create an agent
@@ -284,7 +414,17 @@ Endpoints:
   POST /agents/{name}/generate          Send a prompt (blocking)
   POST /agents/{name}/generate-stream   Send a prompt (SSE stream)
   GET  /agents/{name}/session           Get session status
+  POST /v1/chat/completions             OpenAI-compatible endpoint
   GET  /health                          Health check
+
+OpenAI-compatible endpoint — point any OpenAI client at this server:
+  curl http://localhost:8000/v1/chat/completions \\
+    -H 'Content-Type: application/json' \\
+    -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Hello"}]}'
+
+  Use the model name as provider/model. The model prefix determines the
+  provider (kilo/, claude/, gemini/, opencode/, aider/, etc.). Agents
+  are auto-created and sessions persist via the 'user' field.
 
 Examples:
   curl -X POST http://localhost:8000/agents \\

@@ -113,16 +113,29 @@ Always prefer free agents for grunt work. Reserve expensive agents for
 architecture decisions, security reviews, and complex refactoring that
 cheap models get wrong.
 
-## HTTP Server mode
+## HTTP Server with OpenAI-compatible endpoint
 
-When you need to call agentpipe from non-Python tools (shell scripts, CI pipelines,
-other agents that can't pip install), run the FastAPI server:
+The FastAPI server includes an OpenAI-compatible `/v1/chat/completions` endpoint
+so **any tool that speaks the OpenAI API** (Cursor, Continue.dev, any
+OpenAI SDK) can be pointed at agentpipe for free/delegated inference.
 
 ```bash
 python -m agentpipe.server
 ```
 
-Then delegate via curl:
+Point your tool to `http://localhost:8000/v1/chat/completions` and use
+model names like `kilo/kilo-auto/free`, `opencode/big-pickle`, or
+`claude/sonnet`. The model prefix selects which provider to use.
+
+### Via curl (OpenAI format)
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
+```
+
+### Via native API (persistent sessions)
 
 ```bash
 # Create an agent
@@ -134,11 +147,9 @@ curl -X POST http://localhost:8000/agents \
 curl -X POST http://localhost:8000/agents/tester/generate \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Write tests for src/utils.py"}'
-
-# Sessions persist across requests automatically
 ```
 
-The server keeps each agent's session alive so you can do multi-turn
-conversations without managing resume IDs yourself.
+Sessions persist across requests automatically. Use the `user` field in
+OpenAI requests to control session identity.
 
 Docker: `docker compose up`

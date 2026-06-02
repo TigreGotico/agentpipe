@@ -153,13 +153,26 @@ pip install mistral-vibe
 Run multiple agents behind HTTP with persistent sessions — perfect for CI/CD,
 other agents to call, or multi-process deployments.
 
+Includes an **OpenAI-compatible `/v1/chat/completions` endpoint** so any
+OpenAI client (Cursor, Continue.dev, etc.) can be pointed at this server.
+
 ```bash
 pip install agentpipe fastapi uvicorn sse-starlette
 python -m agentpipe.server
 ```
 
 ```bash
-# Create a writer agent
+# OpenAI-compatible — works with any OpenAI SDK
+curl http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
+
+# The model prefix selects the provider:
+#   kilo/... → Kilo Code (free)    claude/... → Claude Code
+#   gemini/... → Gemini CLI        opencode/... → OpenCode
+#   aider/... → Aider              vibe/... → Mistral Vibe
+
+# Native API — create named agents with persistent sessions
 curl -X POST http://localhost:8000/agents \
   -H 'Content-Type: application/json' \
   -d '{"name":"writer","provider":"kilo"}'
@@ -172,7 +185,7 @@ curl -X POST http://localhost:8000/agents/writer/generate \
 # Stream events via SSE
 curl -X POST http://localhost:8000/agents/writer/generate-stream \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"Explain this code","stream":true}'
+  -d '{"prompt":"Explain this code"}'
 
 # Check session status
 curl http://localhost:8000/agents/writer/session
