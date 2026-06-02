@@ -130,11 +130,30 @@ result = await cascade("Quick question", profile="free-only")
 # python -m agentpipe.cascade_run --free-only "Quick question"
 ```
 
+## HTTP Server (FastAPI)
+
+Run agents behind HTTP with an OpenAI-compatible endpoint:
+
+```bash
+pip install agentpipe fastapi uvicorn sse-starlette
+python -m agentpipe.server
+```
+
+```bash
+# OpenAI-compatible — works with any OpenAI client
+curl http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
+```
+
+See the [HTTP Server docs](server.md) for the full API reference and Docker setup.
+
 ## Next Steps
 
 - **[Providers and Models](providers.md)** — See all provider aliases and model options
 - **[Core API](core-api.md)** — Deep dive into Agent, sessions, events, results
 - **[Model Cascade](cascade.md)** — Full cascade system documentation
+- **[HTTP Server](server.md)** — Multi-agent HTTP API with OpenAI-compatible endpoint
 - **[MCP and Approval Modes](mcp-approval.md)** — MCP servers, approval modes, budget caps
 - **[Auth and Quota](auth-quota.md)** — Auth, quota, session management, MCP management
 - **[Feature Matrix](feature-matrix.md)** — Per-provider feature comparison

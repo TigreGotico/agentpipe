@@ -1,65 +1,28 @@
 """
-FastAPI integration — expose agentpipe as an HTTP API.
+HTTP Server — run multiple agents behind HTTP with persistent sessions.
 
 Usage:
-    pip install fastapi uvicorn
-    python -m examples.20_fastapi_integration
+    pip install agentpipe fastapi uvicorn sse-starlette
+    python -m agentpipe.server
 
 Then:
-    curl "http://localhost:8000/ask?q=What+is+Python"
-    curl "http://localhost:8000/cascade?q=Explain+recursion&profile=free-only"
+    # OpenAI-compatible — use with any OpenAI SDK/client
+    curl http://localhost:8000/v1/chat/completions \
+      -H 'Content-Type: application/json' \
+      -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
+
+    # Native API — create and call named agents
+    curl -X POST http://localhost:8000/agents \
+      -H 'Content-Type: application/json' \
+      -d '{"name":"writer","provider":"kilo"}'
+    curl -X POST http://localhost:8000/agents/writer/generate \
+      -H 'Content-Type: application/json' \
+      -d '{"prompt":"Write unit tests"}'
+
+See agentpipe/server.py for the full implementation.
 """
 
-from fastapi import FastAPI
-from pydantic import BaseModel
-
-from agentpipe import Agent, CascadeResult, cascade
-
-
-class AskRequest(BaseModel):
-    q: str
-
-
-class CascadeRequest(BaseModel):
-    q: str
-    profile: str = "free-only"
-
-
-app = FastAPI(title="agentpipe API")
-
-
-@app.get("/ask")
-async def ask(q: str):
-    agent = Agent("gemini-flash", timeout=30)
-    try:
-        text = await agent.generate(q)
-        return {"answer": text, "model": agent.model}
-    except Exception as e:
-        return {"error": str(e), "model": agent.model}
-
-
-@app.get("/cascade")
-async def cascade_ask(q: str, profile: str = "free-only"):
-    try:
-        result: CascadeResult = await cascade(q, profile=profile, per_attempt_timeout=30)
-        return {
-            "answer": result.text,
-            "model": result.successful_model,
-            "provider": result.successful_provider,
-            "attempts": result.attempt_count,
-            "duration": result.total_duration_seconds,
-            "cost": result.total_cost_usd,
-        }
-    except RuntimeError as e:
-        return {"error": str(e)}
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# This is a usage reference — the server runs as:
+#   python -m agentpipe.server
+# Or via Docker:
+#   docker compose up

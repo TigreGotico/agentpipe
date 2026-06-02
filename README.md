@@ -211,13 +211,14 @@ See the [server module](agentpipe/server.py) for the full API.
 - [Feature Matrix](docs/feature-matrix.md) — Per-provider comparison
 - [API Reference](docs/api-reference.md) — All exports
 
-## 24 Example Scripts
+## 25 Example Scripts
 
 ```bash
-python -m examples.11_delegate        # Draft + review pipeline
-python -m examples.10_fan_out         # Parallel subtasks
-python -m examples.07_cascade         # Free → paid fallback
-python -m examples.01_one_shot        # Simplest usage
+python -m examples.20_fastapi_integration  # HTTP server
+python -m examples.11_delegate             # Draft + review pipeline
+python -m examples.10_fan_out              # Parallel subtasks
+python -m examples.07_cascade              # Free → paid fallback
+python -m examples.01_one_shot             # Simplest usage
 ```
 
 ## License
