@@ -148,6 +148,46 @@ npm install -g opencode
 pip install mistral-vibe
 ```
 
+## HTTP Server (FastAPI)
+
+Run multiple agents behind HTTP with persistent sessions — perfect for CI/CD,
+other agents to call, or multi-process deployments.
+
+```bash
+pip install agentpipe fastapi uvicorn sse-starlette
+python -m agentpipe.server
+```
+
+```bash
+# Create a writer agent
+curl -X POST http://localhost:8000/agents \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"writer","provider":"kilo"}'
+
+# Send work — sessions persist automatically
+curl -X POST http://localhost:8000/agents/writer/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Write unit tests for src/parser.py"}'
+
+# Stream events via SSE
+curl -X POST http://localhost:8000/agents/writer/generate-stream \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Explain this code","stream":true}'
+
+# Check session status
+curl http://localhost:8000/agents/writer/session
+```
+
+### Docker
+
+```bash
+docker compose up
+# Or pass API keys:
+# OPENROUTER_API_KEY=sk-xxx docker compose up
+```
+
+See the [server module](agentpipe/server.py) for the full API.
+
 ## Docs
 
 - [Getting Started](docs/getting-started.md) — Install, quickstart, all features
