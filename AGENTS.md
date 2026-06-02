@@ -51,8 +51,7 @@ Full gh-automations CI set present (10 workflows). Pinned at `@dev`.
 - No Neon / `neon-*` references. No meta-commentary in code/docs/commits/PRs.
 - Tests in `tests/` — mock the executor layer; no live CLI calls.
 
-## TODOs
+## Setup on GitHub
 
-- Latest PyPI version: 0.1.0. Run `uv build && uv publish` to publish current code.
-- Requires `PYPI_TOKEN` secret on GitHub for automated publishing.
-- Set `dev` as default branch on GitHub.
+- Set `PYPI_TOKEN` as a repo secret for automated publishing.
+- Set `dev` as the default branch (repo Settings → Branches).

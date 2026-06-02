@@ -51,9 +51,11 @@ from .providers.opencode import (
 )
 from .providers.qoder import QoderProvider
 from .providers.vibe import VibeProvider
+from .version import __version__
 
 __all__ = [
     "Agent",
+    "__version__",
     "AgentProcessError",
     "AgentSession",
     "AgentEvent",

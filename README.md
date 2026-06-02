@@ -1,5 +1,10 @@
 # agentpipe
 
+[![PyPI version](https://img.shields.io/pypi/v/agentpipe?color=blue)](https://pypi.org/project/agentpipe/)
+[![Python versions](https://img.shields.io/pypi/pyversions/agentpipe)](https://pypi.org/project/agentpipe/)
+[![License](https://img.shields.io/github/license/TigreGotico/agentpipe)](LICENSE)
+[![CI](https://github.com/TigreGotico/agentpipe/actions/workflows/build-tests.yml/badge.svg?branch=dev)](https://github.com/TigreGotico/agentpipe/actions)
+
 **Let your expensive coding agent delegate the boring work to cheap ones.**
 
 agentpipe gives you a single async Python API over 7 coding agent CLIs (Aider,
