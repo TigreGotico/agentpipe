@@ -227,3 +227,32 @@ class TestGeminiSubclasses:
     def test_flash_custom_model(self):
         p = GeminiFlashProvider(model="custom")
         assert p.model == "custom"
+
+
+class TestGeminiDeprecation:
+    def test_warning_before_june_18(self):
+        import datetime
+        import warnings
+        from unittest.mock import patch
+
+        with patch.dict("os.environ", {"AGENTPIPE_IGNORE_DEPRECATION": ""}):
+            with patch("agentpipe.providers.gemini._get_today") as mock_today:
+                mock_today.return_value = datetime.date(2026, 6, 17)
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always")
+                    p = GeminiProvider()
+                    assert len(w) == 1
+                    assert issubclass(w[0].category, UserWarning)
+                    assert "stop serving requests" in str(w[0].message)
+
+    def test_error_on_or_after_june_18(self):
+        import datetime
+        import pytest
+        from unittest.mock import patch
+
+        with patch.dict("os.environ", {"AGENTPIPE_IGNORE_DEPRECATION": ""}):
+            with patch("agentpipe.providers.gemini._get_today") as mock_today:
+                mock_today.return_value = datetime.date(2026, 6, 18)
+                with pytest.raises(RuntimeError) as exc_info:
+                    GeminiProvider()
+                assert "stopped serving requests" in str(exc_info.value)

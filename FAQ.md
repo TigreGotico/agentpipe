@@ -31,3 +31,11 @@ Gemini CLI will stop serving requests to Google One and unpaid tiers on June 18.
 
 ### How does agentpipe handle this?
 To avoid interruption of services, `antigravity-flash-medium` has been integrated into the default, coding, reasoning, fast-free, and free-only cascade profiles. Since Antigravity is a free and fast alternative, cascades will automatically fallback to Antigravity if the standard Gemini CLI fails.
+
+### Does the Gemini provider enforce this cutoff date?
+Yes, the `GeminiProvider` class checks the current date on instantiation.
+- **Before June 18, 2026**: It emits a `UserWarning` about the upcoming policy change.
+- **On or after June 18, 2026**: It raises a `RuntimeError` stating that standard Gemini CLI unpaid access is disabled, blocking execution unless explicitly bypassed.
+
+### Can this check be bypassed?
+Yes. Setting the environment variable `AGENTPIPE_IGNORE_DEPRECATION=1` disables the warning and error checks, allowing users on paid/enterprise accounts to continue using the Gemini CLI without issue. This environment variable is also automatically configured for unit tests via `tests/conftest.py`.
