@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -20,6 +21,17 @@ from ._types import (
     SessionExport,
 )
 from .providers.aider import AiderProvider
+from .providers.antigravity import (
+    AntigravityProvider,
+    AntigravityFlashMediumProvider,
+    AntigravityFlashHighProvider,
+    AntigravityFlashLowProvider,
+    AntigravityProLowProvider,
+    AntigravityProHighProvider,
+    AntigravityClaudeSonnetProvider,
+    AntigravityClaudeOpusProvider,
+    AntigravityGptOssProvider,
+)
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
 from .providers.kilo import KiloProvider
@@ -35,6 +47,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from ._types import AgentEvent, GenerationResult, Provider
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CWD = os.environ.get("AGENTPIPE_CWD", "/tmp")
 
@@ -54,6 +68,15 @@ DEFAULT_MODELS: dict[str, str] = {
     "opencode-go": "opencode-go/deepseek-v4-flash",
     "qoder": "mistral-large-latest",
     "vibe": "mistral-large-latest",
+    "antigravity": "Gemini 3.5 Flash (Medium)",
+    "antigravity-flash-medium": "Gemini 3.5 Flash (Medium)",
+    "antigravity-flash-high": "Gemini 3.5 Flash (High)",
+    "antigravity-flash-low": "Gemini 3.5 Flash (Low)",
+    "antigravity-pro-low": "Gemini 3.1 Pro (Low)",
+    "antigravity-pro-high": "Gemini 3.1 Pro (High)",
+    "antigravity-claude-sonnet": "Claude Sonnet 4.6 (Thinking)",
+    "antigravity-claude-opus": "Claude Opus 4.6 (Thinking)",
+    "antigravity-gpt-oss": "GPT-OSS 120B (Medium)",
 }
 
 _PROVIDER_MAP: dict[str, type] = {
@@ -72,6 +95,15 @@ _PROVIDER_MAP: dict[str, type] = {
     "opencode-go": OpencodeGoProvider,
     "qoder": QoderProvider,
     "vibe": VibeProvider,
+    "antigravity": AntigravityProvider,
+    "antigravity-flash-medium": AntigravityFlashMediumProvider,
+    "antigravity-flash-high": AntigravityFlashHighProvider,
+    "antigravity-flash-low": AntigravityFlashLowProvider,
+    "antigravity-pro-low": AntigravityProLowProvider,
+    "antigravity-pro-high": AntigravityProHighProvider,
+    "antigravity-claude-sonnet": AntigravityClaudeSonnetProvider,
+    "antigravity-claude-opus": AntigravityClaudeOpusProvider,
+    "antigravity-gpt-oss": AntigravityGptOssProvider,
 }
 
 
@@ -217,6 +249,8 @@ class Agent:
         return await self.executor.check_binary(self._provider_instance.binary_name)
 
     async def auth_status(self) -> AuthStatus:
+        if self.provider.startswith("antigravity"):
+            return await self._antigravity_auth_status()
         if self.provider == "claude":
             return await self._claude_auth_status()
         if self.provider == "gemini":
@@ -309,6 +343,8 @@ class Agent:
         raise NotImplementedError(f"list_sessions not supported for {self.provider}")
 
     async def list_models(self) -> list[ModelInfo]:
+        if self.provider.startswith("antigravity"):
+            return await self._antigravity_list_models()
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_list_models()
         raise NotImplementedError(f"list_models not supported for {self.provider}")
@@ -336,7 +372,8 @@ class Agent:
                 subscription_type=data.get("subscriptionType"),
                 raw=data,
             )
-        except (AgentProcessError, json.JSONDecodeError):
+        except (AgentProcessError, json.JSONDecodeError) as e:
+            logger.warning("Claude auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _gemini_auth_status(self) -> AuthStatus:
@@ -349,7 +386,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="gemini")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="gemini")
 
     async def _opencode_auth_status(self) -> AuthStatus:
@@ -363,8 +401,42 @@ class Agent:
             stdout, _stderr = await self.executor.run(spec)
             has_any = len(stdout.strip()) > 0
             return AuthStatus(authenticated=has_any, provider="opencode", raw=None)
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
+
+    async def _antigravity_auth_status(self) -> AuthStatus:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=10.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=True, provider=self.provider)
+        except AgentProcessError as e:
+            logger.warning("Antigravity auth status check failed: %s", e)
+            return AuthStatus(authenticated=False, provider=self.provider)
+
+    async def _antigravity_list_models(self) -> list[ModelInfo]:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            models: list[ModelInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line and "Fetching available models..." not in line:
+                    models.append(ModelInfo(id=line, provider="antigravity"))
+            return models
+        except AgentProcessError as e:
+            logger.warning("Antigravity list models failed: %s", e)
+            return []
 
     async def _gemini_list_sessions(self, cwd: str) -> list[SessionEntry]:
         spec = CommandSpec(
@@ -382,7 +454,8 @@ class Agent:
                 if line:
                     entries.append(SessionEntry(session_id=line, provider="gemini"))
             return entries
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini list sessions failed: %s", e)
             return []
 
     async def _opencode_list_sessions(self, cwd: str) -> list[SessionEntry]:
@@ -401,7 +474,8 @@ class Agent:
                 if line:
                     entries.append(SessionEntry(session_id=line, provider="opencode"))
             return entries
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode list sessions failed: %s", e)
             return []
 
     async def _opencode_list_models(self) -> list[ModelInfo]:
@@ -419,7 +493,8 @@ class Agent:
                 if line:
                     models.append(ModelInfo(id=line, provider="opencode"))
             return models
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode list models failed: %s", e)
             return []
 
     async def _opencode_stats(self, *, days: int | None = None, cwd: str) -> dict:
@@ -436,7 +511,8 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return {"raw": stdout}
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode stats failed: %s", e)
             return {"raw": ""}
 
     async def _claude_auth_login(self, *, method: str | None = None) -> AuthStatus:
@@ -447,7 +523,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="claude", method=method)
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude auth login failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _claude_auth_logout(self) -> AuthStatus:
@@ -460,7 +537,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=False, provider="claude")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude auth logout failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _opencode_auth_login(self) -> AuthStatus:
@@ -473,7 +551,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="opencode")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth login failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_auth_logout(self) -> AuthStatus:
@@ -486,7 +565,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=False, provider="opencode")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth logout failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_delete_session(self, session_id: str, cwd: str) -> bool:
@@ -500,7 +580,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode delete session '%s' failed: %s", session_id, e)
             return False
 
     async def _opencode_export_session(self, session_id: str, cwd: str) -> SessionExport:
@@ -514,7 +595,8 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return SessionExport(session_id=session_id, data=stdout, format="json")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode export session '%s' failed: %s", session_id, e)
             return SessionExport(session_id=session_id, data="", format="json")
 
     async def _opencode_import_session(self, data: str, cwd: str) -> str | None:
@@ -532,7 +614,8 @@ class Agent:
                 if line:
                     return line
             return None
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode import session failed: %s", e)
             return None
 
     async def _claude_mcp_add(
@@ -565,7 +648,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP add '%s' failed: %s", name, e)
             return False
 
     async def _claude_mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
@@ -576,7 +660,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP remove '%s' failed: %s", name, e)
             return False
 
     async def _claude_mcp_list(self) -> list[McpServerInfo]:
@@ -592,9 +677,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="claude"))
+                    servers.append(McpServerInfo(name=line))
             return servers
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP list failed: %s", e)
             return []
 
     async def _opencode_mcp_add(
@@ -621,7 +707,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP add '%s' failed: %s", name, e)
             return False
 
     async def _opencode_mcp_remove(self, name: str) -> bool:
@@ -634,7 +721,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP remove '%s' failed: %s", name, e)
             return False
 
     async def _opencode_mcp_list(self) -> list[McpServerInfo]:
@@ -650,9 +738,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="opencode"))
+                    servers.append(McpServerInfo(name=line))
             return servers
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP list failed: %s", e)
             return []
 
     async def _gemini_list_extensions(self) -> list[ExtensionInfo]:
@@ -668,9 +757,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line:
-                    extensions.append(ExtensionInfo(name=line, provider="gemini"))
+                    extensions.append(ExtensionInfo(name=line))
             return extensions
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini list extensions failed: %s", e)
             return []
 
     async def _claude_doctor(self) -> dict:
@@ -683,5 +773,6 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return {"raw": stdout}
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude doctor failed: %s", e)
             return {"raw": ""}

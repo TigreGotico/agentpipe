@@ -9,6 +9,7 @@
 
 ## Medium
 
+- [x] Add provider: `antigravity` (Google DeepMind coding assistant CLI `agy`)
 - [ ] Add `timeout` and `retry` kwargs to `Agent.generate` / `Agent.generate_full`
 - [ ] Publish to PyPI (add `[project.urls]` and set up trusted publishing)
 - [ ] Add provider: `codex` (Anthropic Codex CLI)
