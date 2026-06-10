@@ -21,6 +21,17 @@ from ._types import (
     SessionExport,
 )
 from .providers.aider import AiderProvider
+from .providers.antigravity import (
+    AntigravityProvider,
+    AntigravityFlashMediumProvider,
+    AntigravityFlashHighProvider,
+    AntigravityFlashLowProvider,
+    AntigravityProLowProvider,
+    AntigravityProHighProvider,
+    AntigravityClaudeSonnetProvider,
+    AntigravityClaudeOpusProvider,
+    AntigravityGptOssProvider,
+)
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
 from .providers.kilo import KiloProvider
@@ -57,6 +68,15 @@ DEFAULT_MODELS: dict[str, str] = {
     "opencode-go": "opencode-go/deepseek-v4-flash",
     "qoder": "mistral-large-latest",
     "vibe": "mistral-large-latest",
+    "antigravity": "Gemini 3.5 Flash (Medium)",
+    "antigravity-flash-medium": "Gemini 3.5 Flash (Medium)",
+    "antigravity-flash-high": "Gemini 3.5 Flash (High)",
+    "antigravity-flash-low": "Gemini 3.5 Flash (Low)",
+    "antigravity-pro-low": "Gemini 3.1 Pro (Low)",
+    "antigravity-pro-high": "Gemini 3.1 Pro (High)",
+    "antigravity-claude-sonnet": "Claude Sonnet 4.6 (Thinking)",
+    "antigravity-claude-opus": "Claude Opus 4.6 (Thinking)",
+    "antigravity-gpt-oss": "GPT-OSS 120B (Medium)",
 }
 
 _PROVIDER_MAP: dict[str, type] = {
@@ -75,6 +95,15 @@ _PROVIDER_MAP: dict[str, type] = {
     "opencode-go": OpencodeGoProvider,
     "qoder": QoderProvider,
     "vibe": VibeProvider,
+    "antigravity": AntigravityProvider,
+    "antigravity-flash-medium": AntigravityFlashMediumProvider,
+    "antigravity-flash-high": AntigravityFlashHighProvider,
+    "antigravity-flash-low": AntigravityFlashLowProvider,
+    "antigravity-pro-low": AntigravityProLowProvider,
+    "antigravity-pro-high": AntigravityProHighProvider,
+    "antigravity-claude-sonnet": AntigravityClaudeSonnetProvider,
+    "antigravity-claude-opus": AntigravityClaudeOpusProvider,
+    "antigravity-gpt-oss": AntigravityGptOssProvider,
 }
 
 
@@ -220,6 +249,8 @@ class Agent:
         return await self.executor.check_binary(self._provider_instance.binary_name)
 
     async def auth_status(self) -> AuthStatus:
+        if self.provider.startswith("antigravity"):
+            return await self._antigravity_auth_status()
         if self.provider == "claude":
             return await self._claude_auth_status()
         if self.provider == "gemini":
@@ -312,6 +343,8 @@ class Agent:
         raise NotImplementedError(f"list_sessions not supported for {self.provider}")
 
     async def list_models(self) -> list[ModelInfo]:
+        if self.provider.startswith("antigravity"):
+            return await self._antigravity_list_models()
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_list_models()
         raise NotImplementedError(f"list_models not supported for {self.provider}")
@@ -371,6 +404,39 @@ class Agent:
         except AgentProcessError as e:
             logger.warning("OpenCode auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
+
+    async def _antigravity_auth_status(self) -> AuthStatus:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=10.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=True, provider=self.provider)
+        except AgentProcessError as e:
+            logger.warning("Antigravity auth status check failed: %s", e)
+            return AuthStatus(authenticated=False, provider=self.provider)
+
+    async def _antigravity_list_models(self) -> list[ModelInfo]:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            models: list[ModelInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line and "Fetching available models..." not in line:
+                    models.append(ModelInfo(id=line, provider="antigravity"))
+            return models
+        except AgentProcessError as e:
+            logger.warning("Antigravity list models failed: %s", e)
+            return []
 
     async def _gemini_list_sessions(self, cwd: str) -> list[SessionEntry]:
         spec = CommandSpec(

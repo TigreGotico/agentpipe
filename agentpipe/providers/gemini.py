@@ -74,6 +74,11 @@ def _parse_gemini_line(
     return None
 
 
+def _get_today() -> datetime.date:
+    import datetime
+    return datetime.date.today()
+
+
 class GeminiProvider:
     def __init__(
         self,
@@ -100,6 +105,24 @@ class GeminiProvider:
         fork_session: bool = False,
         files: list[str] | None = None,
     ) -> None:
+        if os.environ.get("AGENTPIPE_IGNORE_DEPRECATION") != "1":
+            import datetime
+            import warnings
+            today = _get_today()
+            cutoff = datetime.date(2026, 6, 18)
+            if today < cutoff:
+                warnings.warn(
+                    "Gemini CLI will stop serving requests to Google One and unpaid tiers on June 18, 2026. "
+                    "Please migrate to the Antigravity provider (agy) or ensure you are using a paid/enterprise account.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            else:
+                raise RuntimeError(
+                    "Gemini CLI stopped serving requests to Google One and unpaid tiers on June 18, 2026. "
+                    "Please migrate to the Antigravity provider (agy) or ensure you are using a paid/enterprise account."
+                )
+
         self._model = model
         self._sandbox = sandbox
         self._include_dirs = include_dirs

@@ -101,6 +101,7 @@ class CascadeResult:
 CASCADE_PROFILES: dict[str, list[str]] = {
     "default": [
         "opencode/big-pickle",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/gemini-3-flash",
         "opencode/deepseek-v4-flash-free",
@@ -113,6 +114,7 @@ CASCADE_PROFILES: dict[str, list[str]] = {
         "opencode/big-pickle",
         "opencode/deepseek-v4-flash-free",
         "opencode-gemini-3-flash-via-opencode",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/deepseek-v4-flash",
         "opencode/kimi-k2.6",
@@ -125,11 +127,13 @@ CASCADE_PROFILES: dict[str, list[str]] = {
         "opencode/minimax-m2.7",
         "opencode/glm-5",
         "opencode/minimax-m2.5",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/big-pickle",
     ],
     "fast-free": [
         "opencode/big-pickle",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/gemini-3-flash",
         "opencode/deepseek-v4-flash-free",
@@ -138,6 +142,7 @@ CASCADE_PROFILES: dict[str, list[str]] = {
         "opencode/big-pickle",
         "opencode/deepseek-v4-flash-free",
         "opencode/gemini-3-flash",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/mimo-v2.5-free",
         "opencode/nemotron-3-super-free",
@@ -147,6 +152,10 @@ CASCADE_PROFILES: dict[str, list[str]] = {
 MODEL_TIER_MAP: dict[str, ModelTier] = {
     "opencode/big-pickle": ModelTier.FREE,
     "gemini-2.5-flash": ModelTier.FREE,
+    "antigravity": ModelTier.FREE,
+    "antigravity-flash-medium": ModelTier.FREE,
+    "antigravity-flash-high": ModelTier.FREE,
+    "antigravity-flash-low": ModelTier.FREE,
     "opencode/gemini-3-flash": ModelTier.FREE,
     "opencode/deepseek-v4-flash-free": ModelTier.FREE,
     "opencode/mimo-v2.5-free": ModelTier.FREE,
@@ -155,6 +164,9 @@ MODEL_TIER_MAP: dict[str, ModelTier] = {
     "opencode/kimi-k2.5": ModelTier.CHEAP,
     "opencode/minimax-m2.5": ModelTier.CHEAP,
     "opencode-go/deepseek-v4-flash": ModelTier.CHEAP,
+    "antigravity-pro-low": ModelTier.MID,
+    "antigravity-pro-high": ModelTier.MID,
+    "antigravity-gpt-oss": ModelTier.MID,
     "opencode/kimi-k2.6": ModelTier.MID,
     "opencode/minimax-m2.7": ModelTier.MID,
     "opencode/glm-5": ModelTier.MID,
@@ -164,6 +176,8 @@ MODEL_TIER_MAP: dict[str, ModelTier] = {
     "opencode/qwen3.6-plus": ModelTier.PREMIUM,
     "opencode/qwen3.5-plus": ModelTier.PREMIUM,
     "opencode/gemini-3.1-pro": ModelTier.PREMIUM,
+    "antigravity-claude-sonnet": ModelTier.PREMIUM,
+    "antigravity-claude-opus": ModelTier.PREMIUM,
 }
 
 MODEL_PROVIDER_MAP: dict[str, str] = {
@@ -195,6 +209,8 @@ _FREE_MODELS: frozenset[str] = frozenset(
 
 
 def _resolve_provider(model: str) -> str:
+    if model.startswith("antigravity"):
+        return model
     if model in MODEL_PROVIDER_MAP:
         return MODEL_PROVIDER_MAP[model]
     if model.startswith("opencode-go/"):
