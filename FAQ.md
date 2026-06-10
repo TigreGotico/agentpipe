@@ -23,3 +23,11 @@ The `antigravity` provider queries the CLI to retrieve the list of available mod
 
 ### How is authentication status verified?
 Authentication is verified by checking if running `agy models` completes successfully within a short timeout.
+
+## Policy Changes (June 18)
+
+### What happens on June 18 to the Gemini CLI?
+Gemini CLI will stop serving requests to Google One and unpaid tiers on June 18. Callers using unpaid/Google One accounts on standard `gemini` will fail.
+
+### How does agentpipe handle this?
+To avoid interruption of services, `antigravity-flash-medium` has been integrated into the default, coding, reasoning, fast-free, and free-only cascade profiles. Since Antigravity is a free and fast alternative, cascades will automatically fallback to Antigravity if the standard Gemini CLI fails.
