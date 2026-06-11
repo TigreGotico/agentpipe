@@ -26,6 +26,7 @@ from ._types import (
     ToolResultEvent,
     UsageEvent,
 )
+from .batch import BatchItem, iter_batch, run_batch
 from .cascade import (
     CASCADE_PROFILES,
     MODEL_TIER_MAP,
@@ -63,6 +64,7 @@ __all__ = [
     "ApprovalMode",
     "KiloProvider",
     "AuthStatus",
+    "BatchItem",
     "ClaudeHaikuProvider",
     "ClaudeOpusProvider",
     "ClaudeProvider",
@@ -110,6 +112,8 @@ __all__ = [
     "delegate",
     "retry_until",
     "map_concurrent",
+    "iter_batch",
+    "run_batch",
     "cascade",
     "cascade_coding",
     "cascade_fast_free",

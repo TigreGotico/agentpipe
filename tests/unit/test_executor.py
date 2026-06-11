@@ -128,6 +128,19 @@ class TestAsyncSubprocessExecutorRunStreaming:
 
     @_needs_311
     @pytest.mark.asyncio
+    async def test_streaming_with_stdin(self):
+        executor = AsyncSubprocessExecutor()
+        spec = CommandSpec(argv=["cat"], stdin="piped input\n", timeout=5.0)
+
+        results = []
+        async for stream, line in executor.run_streaming(spec):
+            results.append((stream, line))
+
+        stdout = "".join(line for s, line in results if s == "stdout")
+        assert "piped input" in stdout
+
+    @_needs_311
+    @pytest.mark.asyncio
     async def test_streaming_timeout(self):
         executor = AsyncSubprocessExecutor()
         spec = CommandSpec(argv=["sleep", "30"], stdin="", timeout=0.1)

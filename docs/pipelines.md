@@ -1,6 +1,7 @@
 # Pipeline Functions
 
-agentpipe provides four pipeline functions for composing agents.
+agentpipe provides pipeline functions for composing agents, plus a batch API
+for running many independent prompts (dataset creation).
 
 ## fan_out
 
@@ -29,10 +30,13 @@ async def fan_out(
     max_concurrency: int = 5,
     cwd: str | None = None,
     timeout: int = 300,
-) -> list[str]
+    return_exceptions: bool = False,
+) -> list[str | BaseException]
 ```
 
-Returns one string per prompt, in the same order as the input.
+Returns one string per prompt, in the same order as the input. With
+`return_exceptions=True` a failed prompt yields its exception in place
+instead of aborting the whole batch.
 
 ## delegate
 
@@ -122,9 +126,48 @@ async def map_concurrent(
     agents: Sequence[Agent],
     prompt: str,
     *,
+    max_concurrency: int = 5,
     cwd: str | None = None,
     timeout: int = 300,
-) -> list[str]
+    return_exceptions: bool = False,
+) -> list[str | BaseException]
 ```
 
-Returns one string per agent, in the same order as the input list.
+Returns one string per agent, in the same order as the input list. With
+`return_exceptions=True` a failed agent yields its exception in place.
+
+## run_batch / iter_batch
+
+Run many **independent** prompts with bounded concurrency. Unlike `fan_out`,
+every prompt produces a `BatchItem` whether it succeeded or failed — built for
+dataset creation, where one bad item must not sink a thousand-prompt run.
+
+```python
+from agentpipe import Agent, run_batch
+
+items = await run_batch(
+    ["Translate 'hello' to PT", "Translate 'world' to PT"],
+    agent=Agent("opencode-free"),   # omit to use the model cascade per prompt
+    max_concurrency=4,
+    max_retries=1,
+)
+for item in items:                  # input order
+    if item.ok:
+        print(item.id, item.text)
+    else:
+        print(item.id, "FAILED:", item.error)
+```
+
+Prompts can be strings, `(id, prompt)` tuples, or dicts with `prompt`/`id`
+keys. When no `agent` is given, each prompt goes through the
+[model cascade](cascade.md) (`models`/`profile` arguments), so rate-limited
+free models fall back automatically.
+
+`iter_batch` is the streaming variant — an async iterator that yields each
+`BatchItem` as it completes (out of order; each item carries its `index`),
+which is what the [`agentpipe batch` CLI](cli.md) uses to write results
+incrementally. `skip_ids` skips already-answered items (resume support).
+
+**BatchItem fields:** `index`, `id`, `prompt`, `text`, `error`, `provider`,
+`model`, `duration_seconds`, `cost_usd`, `input_tokens`, `output_tokens`,
+plus the `ok` property and `to_dict()` for JSON serialization.

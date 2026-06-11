@@ -8,3 +8,6 @@ dist/
 .env
 .env.*
 !.env.example
+# local planning files (never committed)
+TODO.md
+ROADMAP.md

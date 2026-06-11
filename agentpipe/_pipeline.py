@@ -19,16 +19,29 @@ async def fan_out(
     max_concurrency: int = 5,
     cwd: str | None = None,
     timeout: int = 300,
-) -> list[str]:
+    return_exceptions: bool = False,
+) -> list[str | BaseException]:
+    """Run prompts concurrently on one agent, one fresh session per prompt.
+
+    With return_exceptions=True a failed prompt yields its exception in place
+    instead of aborting the whole batch.
+    """
     sem = asyncio.Semaphore(max_concurrency)
-    results: list[str] = [None] * len(prompts)  # type: ignore[list-item]
+    results: list[str | BaseException] = [None] * len(prompts)  # type: ignore[list-item]
 
     async def _run(idx: int, prompt: str) -> None:
         async with sem:
             session = agent.session(cwd=cwd, timeout=timeout)
             results[idx] = await session.generate(prompt)
 
-    await asyncio.gather(*(_run(i, p) for i, p in enumerate(prompts)))
+    outcomes = await asyncio.gather(
+        *(_run(i, p) for i, p in enumerate(prompts)),
+        return_exceptions=return_exceptions,
+    )
+    if return_exceptions:
+        for idx, outcome in enumerate(outcomes):
+            if isinstance(outcome, BaseException):
+                results[idx] = outcome
     return results
 
 
@@ -87,7 +100,13 @@ async def map_concurrent(
     max_concurrency: int = 5,
     cwd: str | None = None,
     timeout: int = 300,
-) -> list[str]:
+    return_exceptions: bool = False,
+) -> list[str | BaseException]:
+    """Send one prompt to many agents concurrently.
+
+    With return_exceptions=True a failed agent yields its exception in place
+    instead of aborting the whole run.
+    """
     sem = asyncio.Semaphore(max_concurrency)
 
     async def _run(agent: Agent) -> str:
@@ -95,4 +114,4 @@ async def map_concurrent(
             session = agent.session(cwd=cwd, timeout=timeout)
             return await session.generate(prompt)
 
-    return list(await asyncio.gather(*(_run(a) for a in agents)))
+    return list(await asyncio.gather(*(_run(a) for a in agents), return_exceptions=return_exceptions))

@@ -1,240 +1,118 @@
-# agentpipe — Multi-Agent Delegation Skill
+# agentpipe — delegate work to cheaper agents
 
-Use agentpipe when you (the primary coding agent) need to delegate work to
-cheaper or specialized agents running locally. Instead of doing everything
-yourself at your own cost, offload grunt work to free-tier agents.
+You are an expensive coding agent. agentpipe lets you offload grunt work to
+free or cheap local agents from a single shell call, so your own tokens go to
+the parts that actually need you. The delegated agent runs on this machine
+with its own CLI and auth; you just call `agentpipe` and read stdout.
 
-## Setup per coding agent
+## Quick reference
 
-agentpipe is not a plugin — it's a Python library you call from scripts.
-Each coding agent needs to know agentpipe exists and how to invoke it.
+```bash
+agentpipe run -p opencode-free "Write pytest tests for src/parser.py"
+agentpipe run "One-off question"                 # no -p: cascades over free models
+agentpipe run -p gemini-flash -f notes.md        # prompt from a file
+echo "$LONG_PROMPT" | agentpipe run -p kilo      # prompt from stdin
+agentpipe run -p claude --json "task"            # JSON: text + model + token usage
+agentpipe cascade --profile coding "Refactor utils.py to use async IO"
+agentpipe batch prompts.jsonl -o results.jsonl   # dataset creation (see below)
+agentpipe providers                              # which provider CLIs are installed
+agentpipe tiers                                  # known models grouped by cost tier
+```
 
-### Claude Code
+`run` exits 0 with the answer on stdout, non-zero with the error on stderr.
+Set a working directory with `--cwd` when the task should see a repo.
 
-Add to `CLAUDE.md` at the project root:
+## Choosing a worker
 
-```markdown
-## agentpipe — delegation
+| Task | Delegate to | Cost |
+|------|-------------|------|
+| Boilerplate, tests, docstrings | `opencode-free` or `kilo` | $0 |
+| Drafting docs / README | `gemini-flash` | free tier |
+| Bulk text generation, datasets | `agentpipe batch` (cascade) | $0 by default |
+| Code review second opinion | `claude-sonnet` or `gemini-pro` | paid — use sparingly |
+| Anything where free models flake | `agentpipe cascade` | falls back automatically |
 
-You can delegate grunt work to free/cheap agents via agentpipe.
-Write a temp Python script, run it, capture the output:
+Without `-p`, `run` and `batch` use the model cascade: free models first,
+automatic fallback on rate limits and errors. That is the right default for
+fire-and-forget delegation.
+
+## Dataset creation with `batch`
+
+Input is JSONL (`{"id": ..., "prompt": ...}` per line) or plain text (one
+prompt per line, or `-` for stdin). Output is one JSON object per item:
+
+```json
+{"index": 0, "id": "q1", "prompt": "...", "text": "...", "error": null,
+ "provider": "opencode-free", "model": "opencode/big-pickle",
+ "duration_seconds": 4.2, "cost_usd": null, "ok": true}
+```
+
+```bash
+# 500 prompts, 4 in flight, free cascade, append results as they finish
+agentpipe batch prompts.jsonl -o results.jsonl -c 4
+
+# Interrupted or some items failed? Rerun with --resume:
+# successful ids are skipped, failed ones are retried.
+agentpipe batch prompts.jsonl -o results.jsonl -c 4 --resume
+
+# Pin one provider, custom field names
+agentpipe batch qa.jsonl -o out.jsonl -p kilo --prompt-field question --id-field key
+```
+
+Failed items are recorded (`"ok": false`, error message in `error`) instead of
+aborting the run; the exit code is 1 if any item failed. Filter with
+`jq 'select(.ok)'`.
+
+## Python API (multi-step pipelines)
+
+For anything beyond a single shell call — draft/review chains, fan-out with
+shared state, validation loops — use the library:
 
 ```python
 import asyncio
-from agentpipe import Agent
-result = await Agent("kilo").generate("Write tests for src/parser.py")
-print(result)
-```
-
-Run with:
-```bash
-python /tmp/delegate.py
-```
-
-See `SKILL.md` for full delegation patterns and cost awareness.
-```
-
-### OpenCode
-
-Add to `AGENTS.md` at the project root — this file is already present.
-OpenCode reads it at startup. The agent will know agentpipe is available
-and can write delegation scripts on demand.
-
-### Gemini CLI
-
-Gemini reads `GEMINI.md` or `.gemini/instructions.md` from the project
-root. Add:
-
-```markdown
-You can delegate to other coding agents via agentpipe.
-Write a Python script, run it, read the output.
-See SKILL.md for delegation patterns.
-```
-
-### Cursor
-
-Cursor reads `.cursorrules` at the project root. Add:
-
-```markdown
-You can delegate tasks to free/cheap agents via agentpipe (Python lib).
-Write a temporary script, run it with `python /tmp/delegate.py`,
-and use the output. See SKILL.md for patterns and cost info.
-```
-
-### Continue.dev
-
-Continue reads `.continuerules` at the project root. Add:
-
-```markdown
-agentpipe is available for multi-agent delegation.
-Write a temp Python script, execute it, return the result.
-See SKILL.md for usage.
-```
-
-### GitHub Copilot
-
-Copilot reads `.github/copilot-instructions.md`. Add:
-
-```markdown
-You can use agentpipe to delegate work to other coding agents.
-Write a Python script that imports agentpipe, runs a task, prints result.
-```
-
-### Aider
-
-Aider reads `.aider.md` if present. Add:
-
-```markdown
-Use agentpipe to delegate subtasks to other coding agents.
-Write a temp Python script, run it, use the output.
-```
-
-## When to use this skill
-
-| Situation | Do this |
-|-----------|---------|
-| Writing boilerplate tests | Delegate to `opencode-free` or `kilo` |
-| Linting / fixing style | Delegate to `aider --lint` |
-| Drafting docs | Delegate to `gemini-flash` |
-| Parallel code review | Fan out to `aider` + `kilo` simultaneously |
-| You hit a rate limit | Cascade to a cheaper/backup model |
-
-## How to use it
-
-### 1. Install agentpipe
-
-```bash
-pip install agentpipe
-```
-
-You also need at least one provider CLI installed locally (see README).
-
-### 2. Delegate a task
-
-Write a temporary Python script that imports agentpipe, runs the delegation,
-prints the result, and exits:
-
-```python
-# /tmp/delegate_write_test.py
-import asyncio
-from agentpipe import Agent
+from agentpipe import Agent, cascade, delegate, fan_out, run_batch
 
 async def main():
-    agent = Agent("kilo")  # free
-    result = await agent.generate(
-        "Write a pytest test suite for src/parser.py. "
-        "Cover happy path, edge cases, and error handling."
-    )
-    print(result)
+    # one-shot
+    text = await Agent("opencode-free").generate("Write a palindrome checker")
+
+    # cheap drafter + smart reviewer
+    final = await delegate(Agent("kilo"), Agent("claude-sonnet"),
+                           "Write unit tests for src/db.py", "Review for gaps")
+
+    # parallel prompts on one agent
+    reviews = await fan_out(Agent("kilo"), ["Review a.py", "Review b.py"],
+                            max_concurrency=3, return_exceptions=True)
+
+    # dataset run with per-item error capture
+    items = await run_batch(open("prompts.txt").read().splitlines(),
+                            profile="free-only", max_concurrency=4)
+    good = [i for i in items if i.ok]
 
 asyncio.run(main())
 ```
 
-```bash
-python /tmp/delegate_write_test.py
+See `docs/` for the full API (sessions, streaming events, cascade profiles,
+HTTP server with an OpenAI-compatible endpoint).
+
+## When NOT to delegate
+
+- Architecture decisions, security-sensitive changes, tricky debugging —
+  free models get these wrong and you will spend more tokens fixing the mess.
+- Tasks needing context only you have (long conversation history); the
+  delegate only sees the prompt you send and the `--cwd` you give it.
+- Anything under ~10 lines of trivial output — the subprocess round-trip
+  costs more than just writing it.
+
+## Wiring this skill into an agent
+
+Point the agent's instruction file at this document — `CLAUDE.md` (Claude
+Code), `AGENTS.md` (OpenCode), `GEMINI.md` (Gemini CLI), `.cursorrules`
+(Cursor), `.github/copilot-instructions.md` (Copilot) — with one line:
+
+```markdown
+Delegate grunt work to cheaper agents with the `agentpipe` CLI; see SKILL.md.
 ```
 
-### 3. Fan-out for parallelism
-
-```python
-import asyncio
-from agentpipe import fan_out, Agent
-
-async def main():
-    results = await fan_out(
-        Agent("aider", timeout=60),
-        [
-            "Review api/routes.py for security issues",
-            "Review src/db.py for SQL injection",
-            "Review tests/ for coverage gaps",
-        ],
-        max_concurrency=3,
-    )
-    for r in results:
-        print(r)
-
-asyncio.run(main())
-```
-
-### 4. Cascade: try free first, escalate to you
-
-```python
-import asyncio
-from agentpipe import cascade
-
-async def main():
-    result = await cascade(
-        "Refactor this function to be async",
-        profile="default",       # free → cheap → mid
-        max_cost_usd=0.05,
-    )
-    print(result.text)
-
-asyncio.run(main())
-```
-
-## Recommended delegation patterns
-
-| Your task | Delegate to | Why |
-|-----------|-------------|-----|
-| "Write unit tests" | `kilo` or `opencode-free` | Free, fast |
-| "Fix lint errors" | `aider --lint` | Built-in lint fix |
-| "Draft README" | `gemini-flash` | Fast, free |
-| "Explain this code" | `aider` or `kilo` | Cheap |
-| "Review for bugs" | `claude-sonnet` or `gemini-pro` | Smart but expensive — use sparingly |
-| "Generate 10 examples" | `fan_out(kilo, [...], max_concurrency=5)` | Parallel free workers |
-
-## Cost awareness
-
-- `kilo/kilo-auto/free` — $0
-- `opencode/big-pickle` — $0
-- `aider` with OpenRouter free models — $0
-- `gemini-flash` — free tier (15 RPM)
-- `claude/haiku` — cheap (~$0.25/M input)
-- `claude/sonnet` — moderate (~$3/M input)
-- `claude/opus` — expensive (~$15/M input)
-
-Always prefer free agents for grunt work. Reserve expensive agents for
-architecture decisions, security reviews, and complex refactoring that
-cheap models get wrong.
-
-## HTTP Server with OpenAI-compatible endpoint
-
-The FastAPI server includes an OpenAI-compatible `/v1/chat/completions` endpoint
-so **any tool that speaks the OpenAI API** (Cursor, Continue.dev, any
-OpenAI SDK) can be pointed at agentpipe for free/delegated inference.
-
-```bash
-python -m agentpipe.server
-```
-
-Point your tool to `http://localhost:8000/v1/chat/completions` and use
-model names like `kilo/kilo-auto/free`, `opencode/big-pickle`, or
-`claude/sonnet`. The model prefix selects which provider to use.
-
-### Via curl (OpenAI format)
-
-```bash
-curl http://localhost:8000/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
-```
-
-### Via native API (persistent sessions)
-
-```bash
-# Create an agent
-curl -X POST http://localhost:8000/agents \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"tester","provider":"kilo"}'
-
-# Delegate a task
-curl -X POST http://localhost:8000/agents/tester/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"Write tests for src/utils.py"}'
-```
-
-Sessions persist across requests automatically. Use the `user` field in
-OpenAI requests to control session identity.
-
-Docker: `docker compose up`
+Requires `pip install agentpipe` plus at least one provider CLI installed and
+authenticated (run `agentpipe providers` to check).

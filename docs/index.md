@@ -5,6 +5,7 @@ Async Python wrapper for coding agent CLIs (Aider, Claude Code, Gemini, Kilo Cod
 **Pages:**
 
 - **[Getting Started](getting-started.md)** — Install, prerequisites, 30-second quickstart, all features
+- **[Command Line](cli.md)** — `agentpipe run/batch/cascade/providers/tiers`, dataset creation, resume
 - **[Providers and Models](providers.md)** — Provider aliases, OpenCode Free/Zen/Go, model tier map
 - **[Core API](core-api.md)** — Agent, generation methods, sessions, events, results, new features
 - **[Pipeline Functions](pipelines.md)** — fan_out, delegate, retry_until, map_concurrent

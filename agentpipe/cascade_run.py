@@ -22,10 +22,10 @@ def _tier_from_name(name: str) -> ModelTier:
     return {"free": ModelTier.FREE, "cheap": ModelTier.CHEAP, "mid": ModelTier.MID, "premium": ModelTier.PREMIUM}[name]
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Run a prompt through the model cascade",
-        prog="python -m agentpipe.cascade_run",
+        prog="agentpipe cascade",
     )
     parser.add_argument("prompt", help="The prompt to send")
     parser.add_argument(
@@ -46,7 +46,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=120, help="Per-attempt timeout in seconds (default: 120)")
     parser.add_argument("--cwd", default="/tmp", help="Working directory (default: /tmp)")
     parser.add_argument("--json", action="store_true", help="Output result as JSON")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.models:
         models = [m.strip() for m in args.models.split(",")]

@@ -25,6 +25,33 @@ class TestFanOut:
             results = await fan_out(agent, ["a", "b", "c"])
             assert results == ["result-0", "result-1", "result-2"]
 
+    @pytest.mark.asyncio
+    async def test_fan_out_return_exceptions(self):
+        agent = Agent("claude", model="mock")
+
+        async def mock_generate(self_session, prompt, **kwargs):
+            if prompt == "bad":
+                raise RuntimeError("kaboom")
+            return GenerationResult(text=f"ok:{prompt}", returncode=0)
+
+        with patch.object(AgentSession, "generate_full", mock_generate):
+            results = await fan_out(agent, ["a", "bad", "c"], return_exceptions=True)
+
+        assert results[0] == "ok:a"
+        assert isinstance(results[1], RuntimeError)
+        assert results[2] == "ok:c"
+
+    @pytest.mark.asyncio
+    async def test_fan_out_raises_by_default(self):
+        agent = Agent("claude", model="mock")
+
+        async def mock_generate(self_session, prompt, **kwargs):
+            raise RuntimeError("kaboom")
+
+        with patch.object(AgentSession, "generate_full", mock_generate):
+            with pytest.raises(RuntimeError):
+                await fan_out(agent, ["a"])
+
 
 class TestDelegate:
     @pytest.mark.asyncio

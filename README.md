@@ -78,6 +78,25 @@ async def main():
 asyncio.run(main())
 ```
 
+## Command Line
+
+Every install ships an `agentpipe` command — the zero-boilerplate path for
+shell scripts and **other coding agents** to delegate work:
+
+```bash
+agentpipe run -p opencode-free "Write pytest tests for src/parser.py"
+agentpipe run "Quick question"                   # no provider → free-model cascade
+agentpipe cascade --profile coding "Refactor"    # explicit fallback controls
+agentpipe batch prompts.jsonl -o results.jsonl   # dataset creation, resumable
+agentpipe providers                              # which provider CLIs are installed
+```
+
+`batch` is built for dataset generation: JSONL in, JSONL out, bounded
+concurrency, per-item error capture, and `--resume` to continue interrupted
+runs. See the [CLI docs](docs/cli.md) and [SKILL.md](SKILL.md) — the latter is
+a drop-in instruction file that teaches Claude Code / OpenCode / Gemini CLI to
+delegate through agentpipe.
+
 ## Delegate: Draft + Review
 
 The killer feature. Use a cheap/free agent to write, then a strong agent to review.
@@ -229,6 +248,7 @@ See the [Docker docs](docs/server.md#docker) and [server module](agentpipe/serve
 ## Docs
 
 - [Getting Started](docs/getting-started.md) — Install, quickstart, all features
+- [Command Line](docs/cli.md) — `run`, `batch`, `cascade`, `providers`, `tiers`
 - [Providers and Models](docs/providers.md) — Aliases, defaults, OpenCode plans
 - [Core API](docs/core-api.md) — Agent, sessions, events
 - [Pipeline Functions](docs/pipelines.md) — fan_out, delegate, retry_until
