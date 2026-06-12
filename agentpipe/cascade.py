@@ -161,6 +161,7 @@ MODEL_TIER_MAP: dict[str, ModelTier] = {
     "opencode/mimo-v2.5-free": ModelTier.FREE,
     "opencode/nemotron-3-super-free": ModelTier.FREE,
     "opencode/minimax-m3-free": ModelTier.FREE,
+    "mimo/mimo-auto": ModelTier.FREE,
     "opencode/kimi-k2.5": ModelTier.CHEAP,
     "opencode/minimax-m2.5": ModelTier.CHEAP,
     "opencode-go/deepseek-v4-flash": ModelTier.CHEAP,
@@ -172,6 +173,8 @@ MODEL_TIER_MAP: dict[str, ModelTier] = {
     "opencode/glm-5": ModelTier.MID,
     "opencode/glm-5.1": ModelTier.MID,
     "opencode-go/glm-5.1": ModelTier.MID,
+    "xiaomi/mimo-v2-flash": ModelTier.CHEAP,
+    "xiaomi/mimo-v2.5-pro": ModelTier.MID,
     "opencode/gpt-5": ModelTier.PREMIUM,
     "opencode/qwen3.6-plus": ModelTier.PREMIUM,
     "opencode/qwen3.5-plus": ModelTier.PREMIUM,
@@ -183,6 +186,9 @@ MODEL_TIER_MAP: dict[str, ModelTier] = {
 MODEL_PROVIDER_MAP: dict[str, str] = {
     "gemini-2.5-flash": "gemini",
     "gemini-2.5-pro": "gemini",
+    "mimo/mimo-auto": "mimo",
+    "xiaomi/mimo-v2-flash": "mimo",
+    "xiaomi/mimo-v2.5-pro": "mimo",
 }
 
 
@@ -219,6 +225,8 @@ def _resolve_provider(model: str) -> str:
         return "opencode-free"
     if model.startswith("opencode/"):
         return "opencode-zen"
+    if model.startswith(("mimo/", "xiaomi/")):
+        return "mimo"
     raise ValueError(f"Cannot determine provider for model '{model}'")
 
 
