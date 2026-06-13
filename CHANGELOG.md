@@ -1,20 +1,28 @@
 # Changelog
 
+## [0.4.0a1](https://github.com/TigreGotico/agentpipe/tree/0.4.0a1) (2026-06-13)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.3.0a1...0.4.0a1)
+
+**Merged pull requests:**
+
+- feat: add MiMoCode provider [\#17](https://github.com/TigreGotico/agentpipe/pull/17) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.3.0a1](https://github.com/TigreGotico/agentpipe/tree/0.3.0a1) (2026-06-10)
 
-[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.2.2a1...0.3.0a1)
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.2.1a1...0.3.0a1)
 
 **Merged pull requests:**
 
 - feat: add antigravity support to agentpipe [\#14](https://github.com/TigreGotico/agentpipe/pull/14) ([JarbasAl](https://github.com/JarbasAl))
 
-## [0.2.2a1](https://github.com/TigreGotico/agentpipe/tree/0.2.2a1) (2026-06-02)
-
-[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.2.1a1...0.2.2a1)
-
 ## [0.2.1a1](https://github.com/TigreGotico/agentpipe/tree/0.2.1a1) (2026-06-02)
 
-[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.2.1a2...0.2.1a1)
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.2.2a1...0.2.1a1)
+
+## [0.2.2a1](https://github.com/TigreGotico/agentpipe/tree/0.2.2a1) (2026-06-02)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.2.1a2...0.2.2a1)
 
 ## [0.2.1a2](https://github.com/TigreGotico/agentpipe/tree/0.2.1a2) (2026-06-02)
 
