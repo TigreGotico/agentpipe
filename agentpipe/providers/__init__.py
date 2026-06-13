@@ -1,18 +1,19 @@
 from .aider import AiderProvider
 from .antigravity import (
-    AntigravityProvider,
-    AntigravityFlashMediumProvider,
+    AntigravityClaudeOpusProvider,
+    AntigravityClaudeSonnetProvider,
     AntigravityFlashHighProvider,
     AntigravityFlashLowProvider,
-    AntigravityProLowProvider,
-    AntigravityProHighProvider,
-    AntigravityClaudeSonnetProvider,
-    AntigravityClaudeOpusProvider,
+    AntigravityFlashMediumProvider,
     AntigravityGptOssProvider,
+    AntigravityProHighProvider,
+    AntigravityProLowProvider,
+    AntigravityProvider,
 )
 from .claude import ClaudeProvider
 from .gemini import GeminiProvider
 from .kilo import KiloProvider
+from .mimocode import MimocodeProvider
 from .opencode import OpencodeProvider
 
 __all__ = [
@@ -29,5 +30,6 @@ __all__ = [
     "ClaudeProvider",
     "GeminiProvider",
     "KiloProvider",
+    "MimocodeProvider",
     "OpencodeProvider",
 ]

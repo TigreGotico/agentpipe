@@ -41,15 +41,15 @@ from .cascade import (
 )
 from .providers.aider import AiderProvider
 from .providers.antigravity import (
-    AntigravityProvider,
-    AntigravityFlashMediumProvider,
+    AntigravityClaudeOpusProvider,
+    AntigravityClaudeSonnetProvider,
     AntigravityFlashHighProvider,
     AntigravityFlashLowProvider,
-    AntigravityProLowProvider,
-    AntigravityProHighProvider,
-    AntigravityClaudeSonnetProvider,
-    AntigravityClaudeOpusProvider,
+    AntigravityFlashMediumProvider,
     AntigravityGptOssProvider,
+    AntigravityProHighProvider,
+    AntigravityProLowProvider,
+    AntigravityProvider,
 )
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
