@@ -34,7 +34,7 @@ curl http://localhost:8000/v1/chat/completions \
 | `aider/...` | Aider |
 | `vibe/...` | Mistral Vibe |
 
-Agents are auto-created from the model name. Sessions persist — use the
+Agents are auto-created from the model name. Sessions persist. Use the
 `user` field to control session identity for multi-turn conversations.
 
 ### Streaming
@@ -47,7 +47,7 @@ curl http://localhost:8000/v1/chat/completions \
 
 Returns OpenAI-compatible SSE chunks with `[DONE]` termination.
 
-## Native API — Persistent Sessions
+## Native API: Persistent Sessions
 
 Create named agents with specific configuration, then send prompts.
 Sessions persist across requests automatically.
@@ -114,16 +114,16 @@ curl http://localhost:8000/health
 
 ## Docker
 
-The container bundles **6 provider CLIs** (kilo, opencode, gemini, aider,
-vibe, qodercli) — all ready to use without any auth setup for their
-free-tier models. **Claude Code** is **not pre-installed** (install
-manually, see below). On startup it checks what's available and what
+The container bundles 6 provider CLIs (kilo, opencode, gemini, aider,
+vibe, qodercli). Each works without any auth setup for its free-tier
+models. Claude Code is not pre-installed. See the manual install steps
+below. On startup, the container checks what is available and what
 auth is configured.
 
 ### Quick start
 
 ```bash
-# First run — create a .env file with your API keys
+# First run: create a .env file with your API keys
 echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 
@@ -136,9 +136,9 @@ on every push to `dev`.
 
 ### Free-tier: no auth needed
 
-**kilo** and **opencode** work immediately with their free-tier default
-models (`kilo/kilo-auto/free` and `opencode/big-pickle`). No API keys,
-no accounts. Just `docker compose up` and use them.
+`kilo` and `opencode` work immediately with their free-tier default
+models (`kilo/kilo-auto/free` and `opencode/big-pickle`). They need no
+API keys and no accounts. Run `docker compose up` and use them.
 
 ### API keys
 
@@ -219,3 +219,6 @@ When creating an agent via the native API, the `AgentConfig` object supports:
 | `allowed_tools` | list[str] | None | Tool allow list |
 | `disallowed_tools` | list[str] | None | Tool deny list |
 | `effort` | str | None | Effort level (low, medium, high) |
+
+---
+[← Model Cascade](cascade.md) · [Home](index.md) · [MCP and Approval Modes →](mcp-approval.md)

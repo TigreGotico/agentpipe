@@ -40,6 +40,17 @@ from .cascade import (
     tier_summary,
 )
 from .providers.aider import AiderProvider
+from .providers.antigravity import (
+    AntigravityClaudeOpusProvider,
+    AntigravityClaudeSonnetProvider,
+    AntigravityFlashHighProvider,
+    AntigravityFlashLowProvider,
+    AntigravityFlashMediumProvider,
+    AntigravityGptOssProvider,
+    AntigravityProHighProvider,
+    AntigravityProLowProvider,
+    AntigravityProvider,
+)
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
 from .providers.kilo import KiloProvider
@@ -60,6 +71,15 @@ __all__ = [
     "AgentSession",
     "AgentEvent",
     "AiderProvider",
+    "AntigravityProvider",
+    "AntigravityFlashMediumProvider",
+    "AntigravityFlashHighProvider",
+    "AntigravityFlashLowProvider",
+    "AntigravityProLowProvider",
+    "AntigravityProHighProvider",
+    "AntigravityClaudeSonnetProvider",
+    "AntigravityClaudeOpusProvider",
+    "AntigravityGptOssProvider",
     "ApprovalMode",
     "KiloProvider",
     "AuthStatus",
