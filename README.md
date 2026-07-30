@@ -7,14 +7,10 @@
 [![DeepWiki](https://deepwiki.com/badge/TigreGotico/agentpipe)](https://deepwiki.com/repo/TigreGotico/agentpipe)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/TigreGotico/agentpipe/pkgs/container/agentpipe)
 
-**Let your expensive coding agent delegate the boring work to cheap ones.**
-
-We vibe-coded this so your agents can delegate to other agents who delegate to
-other agents — recursive delegation all the way down, just like we did. 🌀
-
-agentpipe gives you a single async Python API over 7 coding agent CLIs (Aider,
-Claude Code, Gemini CLI, Kilo Code, OpenCode, QoderCLI, Vibe). Use it to build
-multi-agent pipelines where a smart planner delegates tasks to cheaper workers.
+agentpipe gives you one async Python API over 7 coding agent CLIs: Aider,
+Claude Code, Gemini CLI, Kilo Code, OpenCode, QoderCLI, and Mistral Vibe. Use
+it to build multi-agent pipelines where one agent plans and a cheaper agent
+does the routine work.
 
 ```python
 from agentpipe import Agent, delegate, fan_out
@@ -27,24 +23,24 @@ async def build_feature():
 
 # Or use the built-in delegation pipeline
 result = await delegate(
-    Agent("opencode-free"),  # drafter — cheap
-    Agent("claude-sonnet"),  # reviewer — smart
+    Agent("opencode-free"),  # drafter - cheap
+    Agent("claude-sonnet"),  # reviewer - smart
     "Write a palindrome checker",
     "Review for edge cases",
 )
 ```
 
-Zero Python dependencies. Works with Python 3.10+.
+agentpipe has zero Python dependencies and needs Python 3.10 or later.
 
-## Why?
+## Why
 
-Coding agents are powerful but expensive. Claude Opus costs ~$15/M tokens.
-Opencode-free models cost $0. The smartest approach: let a strong agent plan
-and review, but delegate grunt work (linting, boilerplate, test writing) to
-free-tier agents.
+Coding agents are useful but they cost money to run. Claude Opus costs
+about $15 per million tokens. Free-tier OpenCode models cost $0. A strong
+agent can plan and review work, then hand routine tasks (linting,
+boilerplate, test writing) to a free-tier agent.
 
-agentpipe wraps every major coding agent CLI behind the same async interface
-so you can mix and match them in a single script.
+agentpipe wraps each major coding agent CLI behind the same async
+interface, so a script can mix and match them.
 
 ## Quick Start
 
@@ -80,14 +76,14 @@ asyncio.run(main())
 
 ## Delegate: Draft + Review
 
-The killer feature. Use a cheap/free agent to write, then a strong agent to review.
+Use a cheap or free agent to write a draft, then a strong agent to review it.
 
 ```python
 from agentpipe import delegate
 
 final = await delegate(
-    Agent("kilo"),          # drafter — free
-    Agent("claude-sonnet"), # reviewer — smart
+    Agent("kilo"),          # drafter - free
+    Agent("claude-sonnet"), # reviewer - smart
     "Write a unit test for this class",
     "Check correctness, coverage, and style",
 )
@@ -107,7 +103,7 @@ results = await fan_out(
 
 ## Cascade: Automatic fallback
 
-Try free models first, escalate to paid on failure, with cost caps.
+Try free models first, then move to paid models on failure, with cost caps.
 
 ```python
 from agentpipe import cascade
@@ -139,16 +135,16 @@ result = await cascade("Quick question", profile="free-only")
 ## Install Provider CLIs
 
 ```
-# Aider (free — OpenRouter)
+# Aider (free - OpenRouter)
 pip install aider-chat
 
 # Claude Code (paid subscription)
 npm install -g @anthropics/claude-code
 
-# Gemini CLI (free — Google account)
+# Gemini CLI (free - Google account)
 npm install -g @google-gemini/gemini-cli
 
-# Kilo Code (free — no CC needed)
+# Kilo Code (free - no CC needed)
 npm install -g @kilocode/cli
 
 # OpenCode (free tier available)
@@ -160,11 +156,11 @@ pip install mistral-vibe
 
 ## HTTP Server (FastAPI)
 
-Run multiple agents behind HTTP with persistent sessions — perfect for CI/CD,
-other agents to call, or multi-process deployments.
+Run multiple agents behind HTTP with persistent sessions. This suits
+CI/CD, calls from other agents, or multi-process deployments.
 
-Includes an **OpenAI-compatible `/v1/chat/completions` endpoint** so any
-OpenAI client (Cursor, Continue.dev, etc.) can be pointed at this server.
+The server includes an OpenAI-compatible `/v1/chat/completions` endpoint,
+so any OpenAI client (Cursor, Continue.dev, and others) can point at it.
 
 ```bash
 pip install agentpipe fastapi uvicorn sse-starlette
@@ -172,7 +168,7 @@ python -m agentpipe.server
 ```
 
 ```bash
-# OpenAI-compatible — works with any OpenAI SDK
+# OpenAI-compatible - works with any OpenAI SDK
 curl http://localhost:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
@@ -182,12 +178,12 @@ curl http://localhost:8000/v1/chat/completions \
 #   gemini/... → Gemini CLI        opencode/... → OpenCode
 #   aider/... → Aider              vibe/... → Mistral Vibe
 
-# Native API — create named agents with persistent sessions
+# Native API - create named agents with persistent sessions
 curl -X POST http://localhost:8000/agents \
   -H 'Content-Type: application/json' \
   -d '{"name":"writer","provider":"kilo"}'
 
-# Send work — sessions persist automatically
+# Send work - sessions persist automatically
 curl -X POST http://localhost:8000/agents/writer/generate \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Write unit tests for src/parser.py"}'
@@ -204,8 +200,8 @@ curl http://localhost:8000/agents/writer/session
 ### Docker
 
 The container bundles 6 provider CLIs (kilo, opencode, gemini, aider,
-vibe, qodercli) — free-tier models work out of the box. Claude Code
-requires manual install (see docs). Image published to
+vibe, qodercli), so free-tier models work without extra setup. Claude
+Code needs a manual install (see the docs). The image is published to
 `ghcr.io/tigregotico/agentpipe:latest`.
 
 ```bash
@@ -216,25 +212,27 @@ echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
 docker compose up
 ```
 
-API keys, auth persistence, and working directory are handled via
-[volume mounts and env vars](docs/server.md#docker) configured in
-`docker-compose.yml`. To set up interactive CLI auth:
+Volume mounts and env vars in `docker-compose.yml` control API keys, auth
+persistence, and the working directory. See
+[volume mounts and env vars](docs/server.md#docker) for details. To set
+up interactive CLI auth:
 
 ```bash
 docker compose run --rm agentpipe kilo auth login
 ```
 
-See the [Docker docs](docs/server.md#docker) and [server module](agentpipe/server.py) for details.
+See the [Docker docs](docs/server.md#docker) and the
+[server module](agentpipe/server.py) for details.
 
 ## Docs
 
-- [Getting Started](docs/getting-started.md) — Install, quickstart, all features
-- [Providers and Models](docs/providers.md) — Aliases, defaults, OpenCode plans
-- [Core API](docs/core-api.md) — Agent, sessions, events
-- [Pipeline Functions](docs/pipelines.md) — fan_out, delegate, retry_until
-- [Model Cascade](docs/cascade.md) — Fallback, cost caps, profiles
-- [Feature Matrix](docs/feature-matrix.md) — Per-provider comparison
-- [API Reference](docs/api-reference.md) — All exports
+- [Getting Started](docs/getting-started.md) - Install, quickstart, all features
+- [Providers and Models](docs/providers.md) - Aliases, defaults, OpenCode plans
+- [Core API](docs/core-api.md) - Agent, sessions, events
+- [Pipeline Functions](docs/pipelines.md) - fan_out, delegate, retry_until
+- [Model Cascade](docs/cascade.md) - Fallback, cost caps, profiles
+- [Feature Matrix](docs/feature-matrix.md) - Per-provider comparison
+- [API Reference](docs/api-reference.md) - All exports
 
 ## 25 Example Scripts
 
