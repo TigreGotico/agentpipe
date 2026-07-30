@@ -42,19 +42,19 @@ class Provider(Protocol):
 
 | Class | Binary | Default Model | Plan | Env Extras |
 |---|---|---|---|---|
-| `ClaudeProvider` | `claude` | `None` (uses DEFAULT_MODELS) | — | `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1` |
-| `ClaudeSonnetProvider` | `claude` | `sonnet` | — | same |
-| `ClaudeHaikuProvider` | `claude` | `haiku` | — | same |
-| `ClaudeOpusProvider` | `claude` | `opus` | — | same |
-| `GeminiProvider` | `gemini` | `None` | — | `GEMINI_CLI_TRUST_WORKSPACE=true` |
-| `GeminiFlashProvider` | `gemini` | `gemini-2.5-flash` | — | same |
-| `GeminiProProvider` | `gemini` | `gemini-2.5-pro` | — | same |
+| `ClaudeProvider` | `claude` | `None` (uses DEFAULT_MODELS) | n/a | `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1` |
+| `ClaudeSonnetProvider` | `claude` | `sonnet` | n/a | same |
+| `ClaudeHaikuProvider` | `claude` | `haiku` | n/a | same |
+| `ClaudeOpusProvider` | `claude` | `opus` | n/a | same |
+| `GeminiProvider` | `gemini` | `None` | n/a | `GEMINI_CLI_TRUST_WORKSPACE=true` |
+| `GeminiFlashProvider` | `gemini` | `gemini-2.5-flash` | n/a | same |
+| `GeminiProProvider` | `gemini` | `gemini-2.5-pro` | n/a | same |
 | `OpencodeProvider` | `opencode` | `opencode/gemini-3-flash` | `zen` | plain `os.environ` |
 | `OpencodeFreeProvider` | `opencode` | `opencode/big-pickle` | `free` | plain `os.environ` |
 | `OpencodeZenProvider` | `opencode` | `opencode/gemini-3-flash` | `zen` | plain `os.environ` |
 | `OpencodeGoProvider` | `opencode` | `opencode-go/deepseek-v4-flash` | `go` | plain `os.environ` |
-| `QoderProvider` | `qodercli` | `None` (uses QoderCLI default) | — | plain `os.environ` |
-| `VibeProvider` | `vibe` | `mistral-large-latest` | — | `MISTRAL_API_KEY` |
+| `QoderProvider` | `qodercli` | `None` (uses QoderCLI default) | n/a | plain `os.environ` |
+| `VibeProvider` | `vibe` | `mistral-large-latest` | n/a | `MISTRAL_API_KEY` |
 
 `OpencodeProvider` is the base class. `OpencodeFreeProvider`, `OpencodeZenProvider`, and `OpencodeGoProvider` inherit from it and set different default models and `plan` properties. `OpencodeProvider()` is a backward-compat alias that behaves identically to `OpencodeZenProvider()`.
 
@@ -137,7 +137,7 @@ vibe --prompt <prompt> [--agent <name>]
     --output streaming
 ```
 
-Vibe uses `--prompt` (not stdin), `--continue`/`--resume` for sessions, `--output streaming` for NDJSON, and `--agent` for approval profiles (default, plan, accept-edits, auto-approve). It does not support system prompts, MCP config, or effort levels via CLI flags — those are configured through `~/.vibe/config.toml`.
+Vibe uses `--prompt` (not stdin), `--continue`/`--resume` for sessions, `--output streaming` for NDJSON, and `--agent` for approval profiles (default, plan, accept-edits, auto-approve). It does not support system prompts, MCP config, or effort levels via CLI flags. Those settings are configured through `~/.vibe/config.toml`.
 
 ## Event Parsing
 
@@ -215,3 +215,6 @@ path = await executor.check_binary("claude")
 | `cwd` | `str | None` | `None` | Working directory |
 | `env` | `dict[str, str] | None` | `None` | Environment variables |
 | `timeout` | `float` | `300.0` | Seconds before kill |
+
+---
+[← Auth and Quota](auth-quota.md) · [Home](index.md) · [Advanced Usage →](advanced.md)
