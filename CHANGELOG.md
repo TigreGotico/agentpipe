@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0a2](https://github.com/TigreGotico/agentpipe/tree/0.4.0a2) (2026-07-30)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.4.0a1...0.4.0a2)
+
+**Merged pull requests:**
+
+- docs: rewrite README in Simplified Technical English [\#20](https://github.com/TigreGotico/agentpipe/pull/20) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.4.0a1](https://github.com/TigreGotico/agentpipe/tree/0.4.0a1) (2026-06-13)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.3.0a1...0.4.0a1)
