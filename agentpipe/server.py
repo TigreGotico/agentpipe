@@ -106,6 +106,27 @@ class _ManagedAgent:
 _agents: dict[str, _ManagedAgent] = {}
 _MAX_AGENTS = 100
 _AGENT_TTL_SECONDS = float(os.environ.get("AGENTPIPE_AGENT_TTL", "3600"))
+# Serve each OpenAI request with its own agent and keep nothing afterwards.
+# Without this, a request that carries no "user" shares one agent with every
+# other such request, and that agent resumes its last session, so history
+# crosses between callers.
+_STATELESS = os.environ.get("AGENTPIPE_STATELESS", "").strip().lower() in ("1", "true", "yes", "on")
+# Stateless mode drops the shared per-agent lock and the _MAX_AGENTS ceiling,
+# which are what keep concurrent provider subprocesses bounded in the default
+# mode. This semaphore replaces them, so a burst of requests queues instead of
+# starting a subprocess each.
+_MAX_CONCURRENT = int(os.environ.get("AGENTPIPE_MAX_CONCURRENCY", "4"))
+_stateless_slots = asyncio.Semaphore(_MAX_CONCURRENT)
+
+# The OpenAI surface is a chat endpoint: it returns text and nothing else, so
+# the provider CLIs' file and shell tools are not needed to serve it. Left
+# unset, an approval mode of None is what makes the opencode provider ask for
+# --dangerously-skip-permissions. DEFAULT keeps the tools behind the CLI's own
+# permission prompts, which a non-interactive run cannot answer.
+# Set AGENTPIPE_OPENAI_APPROVAL to override for a deployment that wants them.
+from agentpipe._types import ApprovalMode
+
+_OPENAI_APPROVAL = os.environ.get("AGENTPIPE_OPENAI_APPROVAL", "").strip().lower()
 
 
 def _evict_stale_agents() -> None:
@@ -377,6 +398,18 @@ def _messages_to_prompt(messages: list[dict]) -> str:
     return "\n".join(parts)
 
 
+def _build_openai_agent(provider: str, model: str) -> Agent:
+    """Build the agent that serves one OpenAI-compatible request."""
+    approval = ApprovalMode.DEFAULT
+    if _OPENAI_APPROVAL:
+        try:
+            approval = ApprovalMode(_OPENAI_APPROVAL)
+        except ValueError:
+            logger.warning("AGENTPIPE_OPENAI_APPROVAL=%r is not an approval "
+                           "mode; using %s", _OPENAI_APPROVAL, approval.value)
+    return Agent(provider, model=model, approval_mode=approval)
+
+
 @app.post("/v1/chat/completions", dependencies=[Depends(_require_auth)])
 async def openai_chat_completions(body: dict):
     model = body.get("model", "kilo/kilo-auto/free")
@@ -390,15 +423,23 @@ async def openai_chat_completions(body: dict):
     agent_name = user_id or model.replace("/", "-").replace(":", "-")
     provider = _model_to_provider(model)
 
-    _evict_stale_agents()
-    if agent_name not in _agents:
-        if len(_agents) >= _MAX_AGENTS:
-            raise HTTPException(503, "Agent store full")
-        _agents[agent_name] = _ManagedAgent(agent=Agent(provider, model=model))
-        logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
+    if _STATELESS:
+        # Not stored in _agents: nothing to look up, nothing to continue, and
+        # nothing left behind once the response is written. The shared slot
+        # limit stands in for the per-agent lock this mode does without.
+        ma = _ManagedAgent(agent=_build_openai_agent(provider, model),
+                           lock=_stateless_slots)
+    else:
+        _evict_stale_agents()
+        if agent_name not in _agents:
+            if len(_agents) >= _MAX_AGENTS:
+                raise HTTPException(503, "Agent store full")
+            _agents[agent_name] = _ManagedAgent(
+                agent=_build_openai_agent(provider, model))
+            logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
 
-    ma = _agents[agent_name]
-    ma.last_used = time.monotonic()
+        ma = _agents[agent_name]
+        ma.last_used = time.monotonic()
 
     if stream:
         return await _openai_stream(ma, prompt, model)
@@ -408,7 +449,7 @@ async def openai_chat_completions(body: dict):
 async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
     async with ma.lock:
         try:
-            if ma.session_id:
+            if ma.session_id and not _STATELESS:
                 ma.agent.continue_last = True
             result = await ma.agent.generate_full(prompt)
             if result.session_id:
@@ -444,7 +485,7 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
 
     async def event_generator():
         async with ma.lock:
-            if ma.session_id:
+            if ma.session_id and not _STATELESS:
                 ma.agent.continue_last = True
 
             session = ma.agent.session()

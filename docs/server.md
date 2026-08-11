@@ -37,6 +37,46 @@ curl http://localhost:8000/v1/chat/completions \
 Agents are auto-created from the model name. Sessions persist. Use the
 `user` field to control session identity for multi-turn conversations.
 
+This surface is a chat endpoint, so its agents are built with the `default`
+approval mode and the provider CLIs' file and shell tools stay behind their own
+permission prompts, which a non-interactive run cannot answer. Set
+`AGENTPIPE_OPENAI_APPROVAL=bypass` for a deployment that wants those tools
+reachable from a request body.
+
+### Stateless mode
+
+Session identity defaults to the `user` field, and falls back to the model name
+when a request does not send one. On a server that answers more than one
+person, that fallback puts every such request on a single agent, which resumes
+its previous session — so one caller's conversation reaches another's.
+
+Set `AGENTPIPE_STATELESS=1` for a shared or public deployment. Each request
+then gets its own agent, no session is ever resumed, and nothing is kept once
+the response is written. Conversation history belongs to the client, which
+sends it back as messages, the way the OpenAI API defines it.
+
+```bash
+AGENTPIPE_STATELESS=1 uvicorn agentpipe.server:app --host 0.0.0.0 --port 8000
+```
+
+Stateless mode governs the OpenAI surface only. The native `/agents/*`
+endpoints work with agents an operator created by name, whose sessions are the
+point, and they keep them.
+
+It also does without the per-agent lock that serializes the default mode, so
+`AGENTPIPE_MAX_CONCURRENCY` (default 4) bounds how many provider subprocesses
+may run at once.
+
+The provider CLIs keep their own records: opencode writes every conversation to
+a SQLite database under `~/.local/share/opencode`. Stateless mode governs
+agentpipe, not the CLI's own store, so a deployment that must keep history off
+disk backs those directories with memory as well. `docker-compose.stateless.yml`
+does both, and mounts nothing from the host:
+
+```bash
+docker compose -f docker-compose.stateless.yml up -d
+```
+
 ### Streaming
 
 ```bash
