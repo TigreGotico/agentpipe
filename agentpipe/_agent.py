@@ -213,6 +213,17 @@ class Agent:
             kwargs["files"] = self.files
         self._provider_instance = cls(**kwargs)
 
+    # Fields the provider copies at construction. Setting one on a built Agent
+    # has to be pushed through, or the assignment is silently discarded.
+    _PROVIDER_SYNCED = ("continue_last", "fork_session")
+
+    def __setattr__(self, name: str, value) -> None:
+        super().__setattr__(name, value)
+        if name in Agent._PROVIDER_SYNCED:
+            provider = self.__dict__.get("_provider_instance")
+            if provider is not None:
+                setattr(provider, f"_{name}", value)
+
     async def generate(
         self,
         prompt: str,
