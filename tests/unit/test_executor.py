@@ -128,6 +128,21 @@ class TestAsyncSubprocessExecutorRunStreaming:
 
     @_needs_311
     @pytest.mark.asyncio
+    async def test_streaming_with_stdin_reaches_the_process(self):
+        # StreamWriter.write returns None, so awaiting it raised TypeError and
+        # every command that feeds stdin failed. opencode session import is one.
+        executor = AsyncSubprocessExecutor()
+        spec = CommandSpec(argv=["cat"], stdin="fed through stdin\n", timeout=5.0)
+
+        results = []
+        async for stream, line in executor.run_streaming(spec):
+            results.append((stream, line))
+
+        stdout = "".join(line for s, line in results if s == "stdout")
+        assert "fed through stdin" in stdout
+
+    @_needs_311
+    @pytest.mark.asyncio
     async def test_streaming_timeout(self):
         executor = AsyncSubprocessExecutor()
         spec = CommandSpec(argv=["sleep", "30"], stdin="", timeout=0.1)
