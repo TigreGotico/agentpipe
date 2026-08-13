@@ -54,7 +54,11 @@ app = FastAPI(
 )
 
 # --- Security: optional bearer-token auth via AGENTPIPE_API_KEY env var ---
-_API_KEY: str | None = os.environ.get("AGENTPIPE_API_KEY")
+# An empty value means "no key", not "the empty key". Compose files pass
+# `AGENTPIPE_API_KEY: "${AGENTPIPE_API_KEY:-}"`, so an operator who sets no key
+# gets an empty string here, and treating that as a real key rejected every
+# request with 401 while the server looked healthy.
+_API_KEY: str | None = os.environ.get("AGENTPIPE_API_KEY", "").strip() or None
 _bearer_scheme = HTTPBearer(auto_error=False)
 _bearer_dep = Depends(_bearer_scheme)
 
