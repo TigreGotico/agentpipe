@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.1a1](https://github.com/TigreGotico/agentpipe/tree/0.5.1a1) (2026-08-13)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.5.0a1...0.5.1a1)
+
+**Merged pull requests:**
+
+- fix: writing to a subprocess stdin no longer raises TypeError [\#28](https://github.com/TigreGotico/agentpipe/pull/28) ([JarbasAl](https://github.com/JarbasAl))
+- ci: publish the version alongside the latest docker tag [\#26](https://github.com/TigreGotico/agentpipe/pull/26) ([JarbasAl](https://github.com/JarbasAl))
+- fix: an empty AGENTPIPE\_API\_KEY no longer rejects every request [\#24](https://github.com/TigreGotico/agentpipe/pull/24) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.5.0a1](https://github.com/TigreGotico/agentpipe/tree/0.5.0a1) (2026-08-11)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.4.0a2...0.5.0a1)
