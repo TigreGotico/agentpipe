@@ -19,7 +19,7 @@ from agentpipe._types import ApprovalMode
 def _load_server(monkeypatch, **env):
     """Import agentpipe.server with the given environment."""
     for key in ("AGENTPIPE_STATELESS", "AGENTPIPE_OPENAI_APPROVAL",
-                "AGENTPIPE_MAX_CONCURRENCY"):
+                "AGENTPIPE_MAX_CONCURRENCY", "AGENTPIPE_API_KEY"):
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
@@ -110,6 +110,32 @@ class TestStatelessMode:
         for fn in (server._openai_complete, server._openai_stream):
             source = __import__("inspect").getsource(fn)
             assert "not _STATELESS" in source, fn.__name__
+
+
+class TestEmptyApiKeyIsNoKey:
+    """`AGENTPIPE_API_KEY: "${AGENTPIPE_API_KEY:-}"` in a compose file sets an
+    empty string, and reading that as a real key locked out every caller."""
+
+    async def test_empty_value_leaves_the_server_open(self, monkeypatch):
+        server = _load_server(monkeypatch, AGENTPIPE_API_KEY="")
+        assert server._API_KEY is None
+        assert await server._require_auth(None) is None
+
+    async def test_whitespace_only_value_leaves_the_server_open(self, monkeypatch):
+        server = _load_server(monkeypatch, AGENTPIPE_API_KEY="   ")
+        assert server._API_KEY is None
+        assert await server._require_auth(None) is None
+
+    async def test_a_real_key_is_still_required(self, monkeypatch):
+        from fastapi import HTTPException
+        from fastapi.security import HTTPAuthorizationCredentials
+
+        server = _load_server(monkeypatch, AGENTPIPE_API_KEY="s3cret")
+        assert server._API_KEY == "s3cret"
+        with pytest.raises(HTTPException):
+            await server._require_auth(None)
+        good = HTTPAuthorizationCredentials(scheme="Bearer", credentials="s3cret")
+        assert await server._require_auth(good) is None
 
 
 class TestModelRoutingRefusesWhatItCannotPlace:
