@@ -37,7 +37,7 @@ class AsyncSubprocessExecutor:
 
         if process.stdin is not None:
             if spec.stdin:
-                await process.stdin.write(spec.stdin.encode())
+                process.stdin.write(spec.stdin.encode())
                 await process.stdin.drain()
             process.stdin.close()
 
