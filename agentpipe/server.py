@@ -38,6 +38,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, field_validator
 
 from agentpipe import Agent, GenerationResult
+from agentpipe._agent import DEFAULT_MODELS, _PROVIDER_MAP
 from agentpipe._types import AgentEvent, ThinkingEvent, ToolCallEvent, ToolResultEvent, UsageEvent
 
 try:
@@ -367,18 +368,48 @@ async def get_session(name: str) -> dict:
     return {"name": name, "session_id": ma.session_id}
 
 
+# The OpenAI `model` field carries both the provider and the model, so the part
+# before the first slash has to name a provider. These are the prefixes the
+# provider CLIs actually emit in their own model strings.
+_MODEL_PREFIXES: dict[str, str] = {
+    "aider": "aider",
+    "openrouter": "aider",
+    "antigravity": "antigravity",
+    "claude": "claude",
+    "gemini": "gemini",
+    "kilo": "kilo",
+    "mimo": "mimo",
+    "xiaomi": "mimo",
+    "opencode": "opencode",
+    "opencode-go": "opencode-go",
+    "qoder": "qoder",
+    "vibe": "vibe",
+}
+
+
 def _model_to_provider(model: str) -> str:
-    prefix = model.split("/")[0].lower()
-    known: dict[str, str] = {
-        "aider": "aider",
-        "claude": "claude",
-        "gemini": "gemini",
-        "kilo": "kilo",
-        "opencode": "opencode",
-        "qoder": "qoder",
-        "vibe": "vibe",
-    }
-    return known.get(prefix, "kilo")
+    """Name the provider that serves *model*, or refuse.
+
+    A model this server cannot place used to fall through to kilo, which then
+    failed inside the CLI with an error that named neither the model nor the
+    provider. Refusing here says what went wrong.
+    """
+    name = model.strip()
+    if name in _PROVIDER_MAP:
+        # A bare provider alias, e.g. "opencode-free". The provider picks its
+        # own default model.
+        return name
+    prefix = name.split("/")[0].lower()
+    provider = _MODEL_PREFIXES.get(prefix)
+    if provider is None:
+        raise HTTPException(
+            400,
+            f"Unknown model '{model}'. Use one of the provider aliases "
+            f"({', '.join(sorted(_PROVIDER_MAP))}) or a model whose prefix "
+            f"names a provider ({', '.join(sorted(_MODEL_PREFIXES))}). "
+            "GET /v1/models lists the defaults.",
+        )
+    return provider
 
 
 def _messages_to_prompt(messages: list[dict]) -> str:
@@ -398,7 +429,7 @@ def _messages_to_prompt(messages: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def _build_openai_agent(provider: str, model: str) -> Agent:
+def _build_openai_agent(provider: str, model: str | None) -> Agent:
     """Build the agent that serves one OpenAI-compatible request."""
     approval = ApprovalMode.DEFAULT
     if _OPENAI_APPROVAL:
@@ -408,6 +439,25 @@ def _build_openai_agent(provider: str, model: str) -> Agent:
             logger.warning("AGENTPIPE_OPENAI_APPROVAL=%r is not an approval "
                            "mode; using %s", _OPENAI_APPROVAL, approval.value)
     return Agent(provider, model=model, approval_mode=approval)
+
+
+@app.get("/v1/models", dependencies=[Depends(_require_auth)])
+async def openai_models() -> dict:
+    """List what the `model` field accepts, in the shape OpenAI clients expect.
+
+    Each entry is a provider alias. Its default model is listed too, and either
+    string is accepted as the `model` field.
+    """
+    created = int(time.time())
+    data = []
+    for alias in sorted(_PROVIDER_MAP):
+        default = DEFAULT_MODELS.get(alias)
+        data.append({"id": alias, "object": "model", "created": created,
+                     "owned_by": "agentpipe", "default_model": default})
+        if default and default != alias:
+            data.append({"id": default, "object": "model", "created": created,
+                         "owned_by": "agentpipe", "default_model": default})
+    return {"object": "list", "data": data}
 
 
 @app.post("/v1/chat/completions", dependencies=[Depends(_require_auth)])
@@ -422,12 +472,14 @@ async def openai_chat_completions(body: dict):
 
     agent_name = user_id or model.replace("/", "-").replace(":", "-")
     provider = _model_to_provider(model)
+    # A bare alias names no model, so let the provider use its own default.
+    model_arg = None if model.strip() in _PROVIDER_MAP else model
 
     if _STATELESS:
         # Not stored in _agents: nothing to look up, nothing to continue, and
         # nothing left behind once the response is written. The shared slot
         # limit stands in for the per-agent lock this mode does without.
-        ma = _ManagedAgent(agent=_build_openai_agent(provider, model),
+        ma = _ManagedAgent(agent=_build_openai_agent(provider, model_arg),
                            lock=_stateless_slots)
     else:
         _evict_stale_agents()
@@ -435,7 +487,7 @@ async def openai_chat_completions(body: dict):
             if len(_agents) >= _MAX_AGENTS:
                 raise HTTPException(503, "Agent store full")
             _agents[agent_name] = _ManagedAgent(
-                agent=_build_openai_agent(provider, model))
+                agent=_build_openai_agent(provider, model_arg))
             logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
 
         ma = _agents[agent_name]
@@ -535,6 +587,7 @@ Endpoints:
   POST /agents/{name}/generate          Send a prompt (blocking)
   POST /agents/{name}/generate-stream   Send a prompt (SSE stream)
   GET  /agents/{name}/session           Get session status
+  GET  /v1/models                       OpenAI-compatible model list
   POST /v1/chat/completions             OpenAI-compatible endpoint
   GET  /health                          Health check
 

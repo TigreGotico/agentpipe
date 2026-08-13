@@ -110,3 +110,46 @@ class TestStatelessMode:
         for fn in (server._openai_complete, server._openai_stream):
             source = __import__("inspect").getsource(fn)
             assert "not _STATELESS" in source, fn.__name__
+
+
+class TestModelRoutingRefusesWhatItCannotPlace:
+    """An unplaceable model used to fall through to kilo and fail inside the CLI."""
+
+    def test_known_prefixes_reach_their_provider(self, monkeypatch):
+        server = _load_server(monkeypatch)
+        assert server._model_to_provider("opencode/big-pickle") == "opencode"
+        assert server._model_to_provider("opencode-go/deepseek-v4-flash") == "opencode-go"
+        assert server._model_to_provider("kilo/kilo-auto/free") == "kilo"
+        assert server._model_to_provider("openrouter/google/gemma-4:free") == "aider"
+        assert server._model_to_provider("xiaomi/mimo-v2.5-pro") == "mimo"
+
+    def test_a_bare_provider_alias_is_accepted(self, monkeypatch):
+        server = _load_server(monkeypatch)
+        assert server._model_to_provider("opencode-free") == "opencode-free"
+        assert server._model_to_provider("antigravity-flash-medium") == "antigravity-flash-medium"
+
+    def test_an_unknown_model_is_refused_by_name(self, monkeypatch):
+        from fastapi import HTTPException
+
+        server = _load_server(monkeypatch)
+        with pytest.raises(HTTPException) as exc:
+            server._model_to_provider("gpt-4o")
+        assert exc.value.status_code == 400
+        assert "gpt-4o" in exc.value.detail
+
+    def test_every_provider_alias_can_be_named(self, monkeypatch):
+        server = _load_server(monkeypatch)
+        from agentpipe._agent import _PROVIDER_MAP
+
+        for alias in _PROVIDER_MAP:
+            assert server._model_to_provider(alias) == alias
+
+
+class TestModelListing:
+    async def test_it_lists_every_provider_alias(self, monkeypatch):
+        server = _load_server(monkeypatch)
+        from agentpipe._agent import _PROVIDER_MAP
+
+        listed = {entry["id"] for entry in (await server.openai_models())["data"]}
+        assert set(_PROVIDER_MAP) <= listed
+        assert "opencode/big-pickle" in listed
