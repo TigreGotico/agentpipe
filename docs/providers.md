@@ -35,6 +35,12 @@ Agent("qoder")            # model=None (uses QoderCLI default)  (QoderProvider)
 
 # Mistral Vibe
 Agent("vibe")             # model="mistral-large-latest"  (VibeProvider)
+
+# MimoCode (binary: mimo)
+Agent("mimo")             # model="mimo/mimo-auto"  (MimocodeProvider)
+
+# Antigravity (binary: agy)
+Agent("antigravity")      # model="Gemini 3.5 Flash (Medium)"  (AntigravityProvider)
 ```
 
 Override the model at any time:
@@ -63,6 +69,22 @@ Agent("opencode-go", model="opencode-go/kimi-k2.6")
 | `opencode-go` | `OpencodeGoProvider` | `opencode-go/deepseek-v4-flash` |
 | `qoder` | `QoderProvider` | *(uses QoderCLI default)* |
 | `vibe` | `VibeProvider` | `mistral-large-latest` |
+| `mimo` | `MimocodeProvider` | `mimo/mimo-auto` |
+| `mimo-auto` | `MimocodeAutoProvider` | `mimo/mimo-auto` |
+| `mimo-v2-pro` | `MimocodeV2ProProvider` | `xiaomi/mimo-v2.5-pro` |
+| `mimo-v2-flash` | `MimocodeV2FlashProvider` | `xiaomi/mimo-v2-flash` |
+| `antigravity` | `AntigravityProvider` | `Gemini 3.5 Flash (Medium)` |
+| `antigravity-flash-medium` | `AntigravityFlashMediumProvider` | `Gemini 3.5 Flash (Medium)` |
+| `antigravity-flash-high` | `AntigravityFlashHighProvider` | `Gemini 3.5 Flash (High)` |
+| `antigravity-flash-low` | `AntigravityFlashLowProvider` | `Gemini 3.5 Flash (Low)` |
+| `antigravity-pro-low` | `AntigravityProLowProvider` | `Gemini 3.1 Pro (Low)` |
+| `antigravity-pro-high` | `AntigravityProHighProvider` | `Gemini 3.1 Pro (High)` |
+| `antigravity-claude-sonnet` | `AntigravityClaudeSonnetProvider` | `Claude Sonnet 4.6 (Thinking)` |
+| `antigravity-claude-opus` | `AntigravityClaudeOpusProvider` | `Claude Opus 4.6 (Thinking)` |
+| `antigravity-gpt-oss` | `AntigravityGptOssProvider` | `GPT-OSS 120B (Medium)` |
+
+The Antigravity and MimoCode CLIs (`agy`, `mimo`) are not in the docker image.
+Install them yourself to use those providers.
 
 ## OpenCode Plans: Free / Zen / Go
 

@@ -15,8 +15,10 @@
 
 services:
   agentpipe:
-    build: .
+    # Published from dev on every push. Swap in a version tag to pin, or
+    # uncomment the build line to run a local checkout instead.
     image: ghcr.io/tigregotico/agentpipe:latest
+    # build: .
     container_name: agentpipe
     restart: unless-stopped
     ports:
@@ -26,9 +28,10 @@ services:
       # Without this, requests that carry no "user" all key to one agent named
       # after the model, and that agent continues its last session.
       AGENTPIPE_STATELESS: "1"
-      # Set to require a bearer token. Leave empty only behind a proxy that
-      # does its own authentication.
-      AGENTPIPE_API_KEY: "${AGENTPIPE_API_KEY:-}"
+      # Uncomment to require a bearer token. Leave it out entirely when a
+      # proxy in front does the authentication -- an empty value is not the
+      # same as no value.
+      # AGENTPIPE_API_KEY: "${AGENTPIPE_API_KEY:?set a key or remove this line}"
       AGENTPIPE_MAX_PROMPT_LENGTH: "${AGENTPIPE_MAX_PROMPT_LENGTH:-100000}"
       # How many provider subprocesses may run at once. Stateless mode has no
       # shared per-agent lock, so this is what stops a burst of requests from

@@ -18,14 +18,21 @@ agentpipe has no Python runtime dependencies. It uses only `asyncio`, `dataclass
 
 The provider CLIs must be installed and authenticated separately:
 
-| CLI | Install | Auth |
-|-----|---------|------|
-| `aider` | `pip install aider-chat` | OpenRouter OAuth (auto on first run) |
-| `claude` | `npm install -g @anthropics/claude-code` | `claude auth login` |
-| `gemini` | `npm install -g @anthropic-ai/gemini-cli` | Browser-based OAuth |
-| `kilo` | `npm install -g @kilocode/cli` | `kilo auth login` (free tier: no CC) |
-| `opencode` | `npm install -g opencode` | `opencode auth` |
-| `vibe` | `pip install mistral-vibe` | `vibe --setup` (Mistral API key) |
+| CLI | Install | Auth | Cost |
+|-----|---------|------|------|
+| `aider` | `pip install aider-chat` | OpenRouter OAuth (auto on first run) | Free tier via OpenRouter |
+| `claude` | `npm install -g @anthropic-ai/claude-code` | `claude auth login` | Paid Anthropic subscription |
+| `gemini` | `npm install -g @google/gemini-cli` | Browser-based OAuth | Free tier, Google account |
+| `kilo` | `npm install -g @kilocode/cli` | `kilo auth login` | Free tier, no card |
+| `opencode` | `npm install -g opencode-ai` | `opencode auth` | Free tier, no account needed |
+| `qodercli` | `npm install -g @qoder-ai/qodercli` | `qodercli` on first run | Per-use |
+| `vibe` | `pip install mistral-vibe` | `vibe --setup` (Mistral API key) | Free tier |
+| `agy` | Antigravity CLI, from Google | `agy` on first run | Free tier |
+| `mimo` | MimoCode CLI, from Xiaomi | `mimo` on first run | Free tier |
+
+The [docker image](free-llm-endpoint.md) already carries aider, gemini, kilo,
+opencode, qodercli and vibe, so the fastest way to try any of them is to pull
+it rather than install anything.
 
 ## 30-Second Quickstart
 

@@ -154,25 +154,31 @@ curl http://localhost:8000/health
 
 ## Docker
 
-The container bundles 6 provider CLIs (kilo, opencode, gemini, aider,
-vibe, qodercli). Each works without any auth setup for its free-tier
-models. Claude Code is not pre-installed. See the manual install steps
-below. On startup, the container checks what is available and what
-auth is configured.
+The image is published at `ghcr.io/tigregotico/agentpipe:latest`, built from
+`dev` on every push. It bundles 6 provider CLIs (kilo, opencode, gemini, aider,
+vibe, qodercli). Each works without any auth setup for its free-tier models.
+Claude Code is not pre-installed. See the manual install steps below. On
+startup, the container checks what is available and what auth is configured.
+
+For the guided version of everything here, including running behind
+ovos-persona-server, read
+[A Free OpenAI-Compatible Endpoint](free-llm-endpoint.md).
 
 ### Quick start
 
 ```bash
-# First run: create a .env file with your API keys
-echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
-
-# Start the server
-docker compose up
+docker run -d --name agentpipe -p 8000:8000 \
+  -e AGENTPIPE_STATELESS=1 \
+  ghcr.io/tigregotico/agentpipe:latest
 ```
 
-The image is auto-built and published to `ghcr.io/tigregotico/agentpipe:latest`
-on every push to `dev`.
+Or with the workstation compose file, which mounts your project and your CLI
+logins. API keys are optional — free-tier kilo and opencode need none:
+
+```bash
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env   # optional
+docker compose up
+```
 
 ### Free-tier: no auth needed
 
@@ -211,8 +217,10 @@ To run interactive auth setup:
 
 ```bash
 docker compose run --rm agentpipe kilo auth login
-docker compose run --rm agentpipe claude auth login
 ```
+
+Claude Code is not in the image, so `claude auth login` only works after the
+manual install below.
 
 ### Claude Code (manual install)
 
@@ -235,6 +243,9 @@ Your current directory is mounted at `/workspace` inside the container.
 Set `AGENTPIPE_CWD=/workspace` to have agents operate on your project files.
 
 ### Build locally
+
+Only needed for unreleased changes or a modified `Dockerfile`. Uncomment the
+`build: .` line in the compose file, then:
 
 ```bash
 docker compose build
