@@ -196,16 +196,16 @@ Keys can be set via environment variables (in a `.env` file or shell):
 Only needed if you want to use authenticated/pro features. Free-tier
 models on kilo/opencode work without any of this.
 
-CLI auth state can be persisted by mounting host directories into the
-container:
+You can mount host login state into the container, or log in inside the
+container and keep the result in a named volume. Exact paths per CLI, a
+copy-pasteable compose snippet, and the security trade-off are in
+**[Sharing Credentials with the Container](credentials.md)**.
 
-| Host path | Container path | Provider |
-|-----------|---------------|----------|
-| `~/.local/share/kilo/` | `/root/.local/share/kilo/` | Kilo Code |
-| `~/.config/opencode/` | `/root/.config/opencode/` | OpenCode |
-| `~/.claude/` | `/root/.claude/` | Claude Code |
-| `~/.config/gemini/` | `/root/.config/gemini/` | Gemini CLI |
-| `~/.vibe/` | `/root/.vibe/` | Mistral Vibe |
+To see what the running container has:
+
+```bash
+docker compose run --rm agentpipe python -m agentpipe.provision
+```
 
 To run interactive auth setup:
 
@@ -216,18 +216,20 @@ docker compose run --rm agentpipe claude auth login
 
 ### Claude Code (manual install)
 
-Claude Code requires a Cloudflare-gated installer and Anthropic auth,
-so it's not pre-installed. To add it:
+Claude Code needs an installer and Anthropic auth, so it's not
+pre-installed. To add it:
 
 ```bash
 # Run the installer inside the container
-docker compose run --rm agentpipe bash -c "curl -fsSL https://claude.ai/install | bash"
+docker compose run --rm agentpipe bash -c "curl -fsSL https://claude.ai/install.sh | bash"
 
 # Then authenticate
 docker compose run --rm agentpipe claude auth login
 ```
 
-The `~/.claude/` mount in `docker-compose.yml` persists the session.
+The `~/.claude/` mount in `docker-compose.yml` persists the session. The
+install itself does not survive a restart — bake it into your own image if
+you need it permanently.
 
 ### Working directory
 
