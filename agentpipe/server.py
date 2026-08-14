@@ -390,6 +390,30 @@ _MODEL_PREFIXES: dict[str, str] = {
     "vibe": "vibe",
 }
 
+# How an operator installs each provider CLI, keyed by the binary name the
+# provider actually execs. Used to make a missing-CLI 503 actionable instead
+# of just naming what is absent. See docs/getting-started.md for the same
+# table with auth steps.
+_CLI_INSTALL_HINTS: dict[str, str] = {
+    "aider": "pip install aider-chat",
+    "claude": "curl -fsSL https://claude.ai/install.sh | bash",
+    "gemini": "npm install -g @google/gemini-cli",
+    "kilo": "npm install -g @kilocode/cli",
+    "opencode": "npm install -g opencode",
+    "qodercli": "npm install -g @qoder-ai/qodercli",
+    "vibe": "pip install mistral-vibe",
+}
+
+
+def _missing_cli_message(binary_name: str) -> str:
+    hint = _CLI_INSTALL_HINTS.get(binary_name)
+    if hint:
+        return (
+            f"Provider CLI '{binary_name}' is not installed or not in PATH. "
+            f"Install it with: {hint}"
+        )
+    return f"Provider CLI '{binary_name}' is not installed or not in PATH"
+
 
 def _model_to_provider(model: str) -> str:
     """Name the provider that serves *model*, or refuse.
@@ -466,8 +490,20 @@ async def openai_models() -> dict:
 
 @app.post("/v1/chat/completions", dependencies=[Depends(_require_auth)])
 async def openai_chat_completions(body: dict):
-    model = body.get("model", "kilo/kilo-auto/free")
-    messages = body.get("messages", [])
+    model = body.get("model")
+    if not model or not model.strip():
+        raise HTTPException(
+            400,
+            "Missing or empty 'model' field. Use one of the provider aliases "
+            f"({', '.join(sorted(_PROVIDER_MAP))}) or a model whose prefix "
+            "names a provider. GET /v1/models lists the defaults.",
+        )
+    messages = body.get("messages")
+    if not messages:
+        raise HTTPException(
+            400,
+            "Missing or empty 'messages' field. Provide at least one message.",
+        )
     stream = body.get("stream", False)
     user_id = body.get("user", "")
 
@@ -503,6 +539,11 @@ async def openai_chat_completions(body: dict):
 
 
 async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
+    binary_name = ma.agent._provider_instance.binary_name
+    import shutil
+
+    if not shutil.which(binary_name):
+        raise HTTPException(503, _missing_cli_message(binary_name))
     async with ma.lock:
         try:
             if ma.session_id and not _STATELESS:
@@ -538,6 +579,12 @@ async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
 async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
     if EventSourceResponse is None:
         raise HTTPException(500, "sse-starlette not installed (pip install sse-starlette)")
+
+    binary_name = ma.agent._provider_instance.binary_name
+    import shutil
+
+    if not shutil.which(binary_name):
+        raise HTTPException(503, _missing_cli_message(binary_name))
 
     async def event_generator():
         async with ma.lock:
