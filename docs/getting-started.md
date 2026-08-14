@@ -21,11 +21,15 @@ The provider CLIs must be installed and authenticated separately:
 | CLI | Install | Auth |
 |-----|---------|------|
 | `aider` | `pip install aider-chat` | OpenRouter OAuth (auto on first run) |
-| `claude` | `npm install -g @anthropics/claude-code` | `claude auth login` |
-| `gemini` | `npm install -g @anthropic-ai/gemini-cli` | Browser-based OAuth |
+| `claude` | `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` |
+| `gemini` | `npm install -g @google/gemini-cli` | Browser OAuth; paid account only since 2026-06-18 |
 | `kilo` | `npm install -g @kilocode/cli` | `kilo auth login` (free tier: no CC) |
-| `opencode` | `npm install -g opencode` | `opencode auth` |
+| `opencode` | `npm install -g opencode` | `opencode providers login` (free tier: no CC) |
+| `qodercli` | `npm install -g @qoder-ai/qodercli` | `qodercli` login prompt |
 | `vibe` | `pip install mistral-vibe` | `vibe --setup` (Mistral API key) |
+
+Running in Docker instead? See [Sharing Credentials](credentials.md) for what to
+volume-map to reuse a login you already have on the host.
 
 ## 30-Second Quickstart
 
