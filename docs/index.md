@@ -11,6 +11,7 @@ Async Python wrapper for coding agent CLIs (Aider, Claude Code, Gemini, Kilo Cod
 - **[Pipeline Functions](pipelines.md)** : fan_out, delegate, retry_until, map_concurrent
 - **[Model Cascade](cascade.md)** : Fallback system, profiles, tiers, CLI runner
 - **[HTTP Server (FastAPI)](server.md)** : Multi-agent HTTP API with OpenAI-compatible endpoint, persistent sessions, Docker
+- **[Sharing Credentials](credentials.md)** : What to volume-map per CLI, named-volume logins, the security trade-off
 - **[MCP and Approval Modes](mcp-approval.md)** : MCP servers (inline + programmatic), approval modes, budget caps
 - **[Auth and Quota](auth-quota.md)** : Auth login/logout, quota, rate limits, session management, MCP management, extensions, doctor
 - **[Provider Internals](provider-internals.md)** : Provider protocol, classes, command building, event parsing

@@ -8,3 +8,7 @@ dist/
 .env
 .env.*
 !.env.example
+# Build artifacts. These were committed by accident once already.
+build/
+dist/
+*.egg-info/
