@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0a1](https://github.com/TigreGotico/agentpipe/tree/0.6.0a1) (2026-08-14)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.5.2a1...0.6.0a1)
+
+**Merged pull requests:**
+
+- chore: drop committed build artifacts and ignore them [\#33](https://github.com/TigreGotico/agentpipe/pull/33) ([JarbasAl](https://github.com/JarbasAl))
+- feat: report and provision provider CLI credentials on first run [\#30](https://github.com/TigreGotico/agentpipe/pull/30) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.5.2a1](https://github.com/TigreGotico/agentpipe/tree/0.5.2a1) (2026-08-14)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.5.1a1...0.5.2a1)
