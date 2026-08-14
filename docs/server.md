@@ -34,8 +34,11 @@ curl http://localhost:8000/v1/chat/completions \
 | `aider/...` | Aider |
 | `vibe/...` | Mistral Vibe |
 
-Agents are auto-created from the model name. Sessions persist. Use the
-`user` field to control session identity for multi-turn conversations.
+Every request is independent, the way the OpenAI API defines it: it gets its
+own agent, resumes nothing, and leaves nothing behind. Send the `user` field to
+opt into a server-side session — requests that carry the same `user` share one
+agent and one conversation, so a multi-turn client can leave history out of the
+request body.
 
 This surface is a chat endpoint, so its agents are built with the `default`
 approval mode and the provider CLIs' file and shell tools stay behind their own
@@ -45,15 +48,10 @@ reachable from a request body.
 
 ### Stateless mode
 
-Session identity defaults to the `user` field, and falls back to the model name
-when a request does not send one. On a server that answers more than one
-person, that fallback puts every such request on a single agent, which resumes
-its previous session — so one caller's conversation reaches another's.
-
-Set `AGENTPIPE_STATELESS=1` for a shared or public deployment. Each request
-then gets its own agent, no session is ever resumed, and nothing is kept once
-the response is written. Conversation history belongs to the client, which
-sends it back as messages, the way the OpenAI API defines it.
+A request that sends no `user` never has a session, so nothing is shared
+between callers by default. `AGENTPIPE_STATELESS=1` goes one step further and
+refuses to keep a session even for a request that does send `user`, for a
+deployment that wants no server-side conversation history at all.
 
 ```bash
 AGENTPIPE_STATELESS=1 uvicorn agentpipe.server:app --host 0.0.0.0 --port 8000
@@ -63,9 +61,14 @@ Stateless mode governs the OpenAI surface only. The native `/agents/*`
 endpoints work with agents an operator created by name, whose sessions are the
 point, and they keep them.
 
-It also does without the per-agent lock that serializes the default mode, so
+A per-request agent has no shared lock to serialize it, so
 `AGENTPIPE_MAX_CONCURRENCY` (default 4) bounds how many provider subprocesses
-may run at once.
+may run at once. That bound is global and it now applies to every request
+without a `user`, which is most traffic on a default server. Four such
+requests can run at once and the fifth waits, where a server that kept one
+agent per model used to run one per model in parallel. Raise
+`AGENTPIPE_MAX_CONCURRENCY` if the box can afford more provider subprocesses
+than that.
 
 The provider CLIs keep their own records: opencode writes every conversation to
 a SQLite database under `~/.local/share/opencode`. Stateless mode governs
