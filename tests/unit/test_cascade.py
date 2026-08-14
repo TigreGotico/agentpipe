@@ -342,3 +342,10 @@ class TestProviderClasses:
 
         p = GeminiProProvider()
         assert p.model == "gemini-2.5-pro"
+
+    def test_antigravity_cascade_resolution(self):
+        from agentpipe.cascade import _resolve_provider, _model_tier
+        assert _resolve_provider("antigravity-flash-medium") == "antigravity-flash-medium"
+        assert _resolve_provider("antigravity-pro-low") == "antigravity-pro-low"
+        assert _model_tier("antigravity-flash-medium") == ModelTier.FREE
+        assert _model_tier("antigravity-pro-low") == ModelTier.MID

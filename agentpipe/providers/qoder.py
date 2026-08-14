@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import json
-import threading
-from typing import Any
 
 from .._types import (
     AgentEvent,
     ApprovalMode,
-    HttpMcpServer,
     McpServerConfig,
-    StdioMcpServer,
     ThinkingEvent,
     ToolCallEvent,
     ToolResultEvent,
-    UsageEvent,
+)
+from ._utils import (
+    ToolTracker,
+    build_mcp_config_json,
+    default_build_env,
+    extract_session_id_from_json,
+    usage_from_anthropic,
 )
 
 QODER_DEFAULT_MODEL = None
@@ -79,9 +81,7 @@ class QoderProvider:
         self._effort = effort
         self._fallback_model = fallback_model
         self._json_schema = json_schema
-        self._tool_map: dict[str, str] = {}
-        self._tool_start_times: dict[str, float] = {}
-        self._tool_lock: threading.Lock = threading.Lock()
+        self._tools = ToolTracker(thread_safe=True)
 
     @property
     def binary_name(self) -> str:
@@ -162,31 +162,14 @@ class QoderProvider:
             cmd.extend(["--model", effective_model])
 
         if self._mcp_servers:
-            cmd.extend(["--mcp-config", self._build_mcp_config_json(), "--strict-mcp-config"])
+            cmd.extend(["--mcp-config", build_mcp_config_json(self._mcp_servers), "--strict-mcp-config"])
 
         if self._max_budget_usd is not None:
             cmd.extend(["--max-budget-usd", str(self._max_budget_usd)])
 
         return cmd
 
-    def _build_mcp_config_json(self) -> str:
-        servers: dict[str, dict[str, Any]] = {}
-        for server in self._mcp_servers:
-            if isinstance(server, HttpMcpServer):
-                entry: dict[str, Any] = {"type": "sse", "url": server.url}
-                if server.headers:
-                    entry["headers"] = dict(server.headers)
-                servers[server.name] = entry
-            else:
-                stdio_entry: dict[str, Any] = {"command": server.command, "args": server.args}
-                if isinstance(server, StdioMcpServer) and server.env:
-                    stdio_entry["env"] = server.env
-                servers[server.name] = stdio_entry
-        return json.dumps({"mcpServers": servers})
-
     def parse_event_line(self, line: str) -> list[AgentEvent]:
-        import time
-
         stripped = line.strip()
         if not stripped:
             return []
@@ -215,9 +198,7 @@ class QoderProvider:
             tool_id = data.get("id", data.get("tool_id"))
             params = data.get("input", data.get("parameters"))
             if tool_id:
-                with self._tool_lock:
-                    self._tool_map[tool_id] = tool_name
-                    self._tool_start_times[tool_id] = time.monotonic()
+                self._tools.record(tool_id, tool_name)
             return [
                 ToolCallEvent(
                     tool=tool_name,
@@ -231,30 +212,18 @@ class QoderProvider:
             if isinstance(output, list):
                 output = "\n".join(str(item) for item in output)
             tool_id = data.get("tool_use_id", data.get("tool_id"))
-            with self._tool_lock:
-                tool_name = self._tool_map.get(tool_id or "", "Tool")
-                start = self._tool_start_times.get(tool_id or "")
-            duration_ms = ((time.monotonic() - start) * 1000) if start else None
+            base = self._tools.resolve(tool_id)
             return [
                 ToolResultEvent(
-                    tool=tool_name,
+                    tool=base.tool,
                     output=str(output) if output else "",
-                    duration_ms=duration_ms,
+                    duration_ms=base.duration_ms,
                 )
             ]
 
         if event_type == "result":
-            usage = data.get("usage") or {}
-            cached = int(usage.get("cache_creation_input_tokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
-            return [
-                UsageEvent(
-                    input_tokens=int(usage.get("input_tokens") or 0) + cached,
-                    output_tokens=int(usage.get("output_tokens") or 0),
-                    cost_usd=(data["total_cost_usd"] if isinstance(data.get("total_cost_usd"), (int, float)) else None),
-                    cache_read_tokens=int(usage.get("cache_read_input_tokens") or 0),
-                    cache_write_tokens=int(usage.get("cache_creation_input_tokens") or 0),
-                )
-            ]
+            cost = data["total_cost_usd"] if isinstance(data.get("total_cost_usd"), (int, float)) else None
+            return [usage_from_anthropic(data.get("usage") or {}, cost_usd=cost)]
 
         if event_type == "system":
             return []
@@ -262,18 +231,7 @@ class QoderProvider:
         return []
 
     def extract_session_id(self, raw_lines: list[str]) -> str | None:
-        for line in raw_lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                data = json.loads(stripped)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            sid = data.get("session_id") or data.get("sessionID")
-            if isinstance(sid, str) and sid:
-                return sid
-        return None
+        return extract_session_id_from_json(raw_lines)
 
     def extract_text(self, raw_lines: list[str]) -> str:
         text_parts: list[str] = []
@@ -303,6 +261,4 @@ class QoderProvider:
         return "".join(text_parts).strip()
 
     def build_env(self) -> dict[str, str]:
-        import os
-
-        return dict(os.environ)
+        return default_build_env()

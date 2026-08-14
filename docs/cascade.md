@@ -12,7 +12,7 @@ result: CascadeResult = await cascade(
     # Pick ONE of: models= or profile= (models overrides profile)
     models=["opencode/big-pickle", "gemini-2.5-flash", "opencode/kimi-k2.5"],
     profile="default",           # named profile from CASCADE_PROFILES
-    max_tier=None,               # ModelTier — stop escalating beyond this tier
+    max_tier=None,               # ModelTier : stop escalating beyond this tier
     max_attempts=10,             # max models to try (default 10)
     max_cost_usd=None,           # stop if cumulative cost exceeds this
     max_total_seconds=None,      # stop if wall time exceeds this
@@ -27,12 +27,12 @@ result: CascadeResult = await cascade(
 ### CascadeResult
 
 ```python
-result.text                    # str — output from the first successful model
-result.successful_model        # str | None — e.g. "opencode/big-pickle"
-result.successful_provider     # str | None — e.g. "opencode-free"
-result.attempts                # list[CascadeAttempt] — full history
-result.total_cost_usd          # float — cumulative cost across attempts
-result.total_duration_seconds  # float — total wall time
+result.text                    # str : output from the first successful model
+result.successful_model        # str | None : e.g. "opencode/big-pickle"
+result.successful_provider     # str | None : e.g. "opencode-free"
+result.attempts                # list[CascadeAttempt] : full history
+result.total_cost_usd          # float : cumulative cost across attempts
+result.total_duration_seconds  # float : total wall time
 result.attempt_count           # int
 result.failed_attempts         # list[CascadeAttempt]
 result.rate_limited_models     # list[str]
@@ -43,17 +43,17 @@ result.rate_limited_models     # list[str]
 Each attempt in the history:
 
 ```python
-attempt.model                 # str — model name
-attempt.provider              # str — resolved provider (e.g. "opencode-free")
+attempt.model                 # str : model name
+attempt.provider              # str : resolved provider (e.g. "opencode-free")
 attempt.success               # bool
-attempt.error_type             # ErrorType | None — RATE_LIMIT, PROCESS_ERROR, TIMEOUT, UNKNOWN
+attempt.error_type             # ErrorType | None : RATE_LIMIT, PROCESS_ERROR, TIMEOUT, UNKNOWN
 attempt.error_message          # str | None
-attempt.rate_limit_resets_in   # int | None — seconds until rate limit resets
+attempt.rate_limit_resets_in   # int | None : seconds until rate limit resets
 attempt.cost_usd               # float | None
 attempt.input_tokens           # int
 attempt.output_tokens          # int
-attempt.duration_seconds       # float — wall time for this attempt
-attempt.result_text             # str | None — output if success
+attempt.duration_seconds       # float : wall time for this attempt
+attempt.result_text             # str | None : output if success
 ```
 
 ### Error Handling
@@ -153,13 +153,13 @@ Track progress in real time:
 
 ```python
 def log_attempt(attempt):
-    status = "✓" if attempt.success else f"✗ {attempt.error_type}"
+    status = "ok" if attempt.success else f"fail: {attempt.error_type}"
     print(f"  {attempt.model} ({attempt.provider}): {status} [{attempt.duration_seconds:.1f}s]")
 
 result = await cascade("prompt", on_attempt=log_attempt)
 # Output:
-#   opencode/big-pickle (opencode-free): ✗ RATE_LIMIT [2.1s]
-#   gemini-2.5-flash (gemini): ✓ [4.5s]
+#   opencode/big-pickle (opencode-free): fail: RATE_LIMIT [2.1s]
+#   gemini-2.5-flash (gemini): ok [4.5s]
 ```
 
 ## CLI Runner
@@ -201,3 +201,6 @@ python -m agentpipe.cascade_run --json "Explain this architecture"
 | `--timeout` | 120 | Per-attempt timeout in seconds |
 | `--cwd` | `/tmp` | Working directory |
 | `--json` | False | Output result as JSON |
+
+---
+[← Pipeline Functions](pipelines.md) · [Home](index.md) · [HTTP Server →](server.md)
