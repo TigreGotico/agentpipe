@@ -127,6 +127,10 @@ class AntigravityProvider:
             pass
         return None
 
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """This CLI reports its failures through a non-zero exit code."""
+        return None
+
     def extract_text(self, raw_lines: list[str]) -> str:
         return "\n".join(line.rstrip("\r\n") for line in raw_lines).strip()
 

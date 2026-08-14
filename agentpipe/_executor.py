@@ -32,6 +32,19 @@ class AgentProcessError(RuntimeError):
         super().__init__(f"Agent process exited with code {returncode}: {snippet}")
 
 
+class ProviderOutputError(RuntimeError):
+    """A provider CLI reported a failure while still exiting successfully.
+
+    aider prints litellm's error to stdout and exits 0, so nothing downstream
+    could tell the difference between an answer and an error, and the error
+    text was handed back as the assistant's reply.
+    """
+
+    def __init__(self, message: str, argv: list[str] | None = None) -> None:
+        self.argv = argv or []
+        super().__init__(message)
+
+
 class AsyncSubprocessExecutor:
     async def run_streaming(
         self,

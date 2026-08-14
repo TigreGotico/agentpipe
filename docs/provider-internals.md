@@ -34,9 +34,19 @@ class Provider(Protocol):
     def extract_text(self, raw_lines: list[str]) -> str: ...
     # Extract the text output from raw output lines
 
+    def detect_error(self, raw_lines: list[str]) -> str | None: ...
+    # Report a failure the CLI printed while still exiting 0, or None
+
     def build_env(self) -> dict[str, str]: ...
     # Build environment variables for the subprocess
 ```
+
+Most CLIs report failures through their exit code and their `detect_error`
+returns `None` in one line. Implement it when the CLI can print an error and
+still exit 0 — aider does this, and without it the error text was returned as
+the assistant's answer. The session calls it after the run and raises
+`ProviderOutputError` when it returns a string, so a provider that reports a
+recoverable hiccup here turns a working answer into a failed request.
 
 ## Provider Classes
 

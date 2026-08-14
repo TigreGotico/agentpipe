@@ -321,6 +321,10 @@ class ClaudeProvider:
                 return parsed.session_id
         return None
 
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """This CLI reports its failures through a non-zero exit code."""
+        return None
+
     def extract_text(self, raw_lines: list[str]) -> str:
         text_parts: list[str] = []
         for line in raw_lines:
