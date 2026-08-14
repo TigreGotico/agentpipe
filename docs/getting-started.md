@@ -12,7 +12,7 @@ Or with pip:
 pip install agentpipe
 ```
 
-No Python runtime dependencies — agentpipe uses only `asyncio`, `dataclasses`, `json`, `re`, and `subprocess` from the standard library.
+agentpipe has no Python runtime dependencies. It uses only `asyncio`, `dataclasses`, `json`, `re`, and `subprocess` from the standard library.
 
 ## Prerequisites
 
@@ -21,11 +21,15 @@ The provider CLIs must be installed and authenticated separately:
 | CLI | Install | Auth |
 |-----|---------|------|
 | `aider` | `pip install aider-chat` | OpenRouter OAuth (auto on first run) |
-| `claude` | `npm install -g @anthropics/claude-code` | `claude auth login` |
-| `gemini` | `npm install -g @anthropic-ai/gemini-cli` | Browser-based OAuth |
+| `claude` | `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` |
+| `gemini` | `npm install -g @google/gemini-cli` | Browser OAuth; paid account only since 2026-06-18 |
 | `kilo` | `npm install -g @kilocode/cli` | `kilo auth login` (free tier: no CC) |
-| `opencode` | `npm install -g opencode` | `opencode auth` |
+| `opencode` | `npm install -g opencode` | `opencode providers login` (free tier: no CC) |
+| `qodercli` | `npm install -g @qoder-ai/qodercli` | `qodercli` login prompt |
 | `vibe` | `pip install mistral-vibe` | `vibe --setup` (Mistral API key) |
+
+Running in Docker instead? See [Sharing Credentials](credentials.md) for what to
+volume-map to reuse a login you already have on the host.
 
 ## 30-Second Quickstart
 
@@ -34,7 +38,7 @@ import asyncio
 from agentpipe import Agent
 
 async def main():
-    # Simplest usage — default free-tier model
+    # simplest usage: default free-tier model
     agent = Agent("gemini")  # → gemini-2.5-flash
     result = await agent.generate("Explain async/await in Python")
     print(result)
@@ -42,7 +46,7 @@ async def main():
 asyncio.run(main())
 ```
 
-No configuration files, no API keys in code — agentpipe shells out to the installed CLIs.
+agentpipe has no configuration files and no API keys in code. It shells out to the installed CLIs.
 
 For the full result with usage tracking:
 
@@ -140,7 +144,7 @@ python -m agentpipe.server
 ```
 
 ```bash
-# OpenAI-compatible — works with any OpenAI client
+# OpenAI-compatible: works with any OpenAI client
 curl http://localhost:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write tests"}]}'
@@ -150,10 +154,13 @@ See the [HTTP Server docs](server.md) for the full API reference and Docker setu
 
 ## Next Steps
 
-- **[Providers and Models](providers.md)** — See all provider aliases and model options
-- **[Core API](core-api.md)** — Deep dive into Agent, sessions, events, results
-- **[Model Cascade](cascade.md)** — Full cascade system documentation
-- **[HTTP Server](server.md)** — Multi-agent HTTP API with OpenAI-compatible endpoint
-- **[MCP and Approval Modes](mcp-approval.md)** — MCP servers, approval modes, budget caps
-- **[Auth and Quota](auth-quota.md)** — Auth, quota, session management, MCP management
-- **[Feature Matrix](feature-matrix.md)** — Per-provider feature comparison
+- **[Providers and Models](providers.md)** - all provider aliases and model options
+- **[Core API](core-api.md)** - Agent, sessions, events, results
+- **[Model Cascade](cascade.md)** - full cascade system documentation
+- **[HTTP Server](server.md)** - multi-agent HTTP API with OpenAI-compatible endpoint
+- **[MCP and Approval Modes](mcp-approval.md)** - MCP servers, approval modes, budget caps
+- **[Auth and Quota](auth-quota.md)** - auth, quota, session management, MCP management
+- **[Feature Matrix](feature-matrix.md)** - per-provider feature comparison
+
+---
+[Home](index.md) · [Providers and Models →](providers.md)

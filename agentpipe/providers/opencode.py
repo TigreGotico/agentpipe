@@ -10,20 +10,12 @@ from .._types import (
     ThinkingEvent,
     ToolCallEvent,
     ToolResultEvent,
-    UsageEvent,
 )
+from ._utils import EFFORT_VARIANT_MAP, default_build_env, extract_session_id_from_json, usage_from_step_finish
 
 OPENCODE_FREE_DEFAULT_MODEL = "opencode/big-pickle"
 OPENCODE_ZEN_DEFAULT_MODEL = "opencode/gemini-3-flash"
 OPENCODE_GO_DEFAULT_MODEL = "opencode-go/deepseek-v4-flash"
-
-_OPENCODE_EFFORT_MAP = {
-    "low": "minimal",
-    "medium": "low",
-    "high": "high",
-    "xhigh": "max",
-    "max": "max",
-}
 
 
 @dataclass
@@ -160,7 +152,7 @@ class OpencodeProvider:
         if effective_model:
             cmd.extend(["--model", effective_model])
         if self._effort:
-            variant = _OPENCODE_EFFORT_MAP.get(self._effort, self._effort)
+            variant = EFFORT_VARIANT_MAP.get(self._effort, self._effort)
             cmd.extend(["--variant", variant])
         if self._include_dirs:
             for d in self._include_dirs:
@@ -211,36 +203,12 @@ class OpencodeProvider:
             return []
 
         if isinstance(parsed, _OpencodeStepFinishEvent):
-            tokens = parsed.tokens or {}
-            cache = tokens.get("cache") or {}
-            cache_read = int(cache.get("read") or 0)
-            cache_write = int(cache.get("write") or 0)
-            cached = cache_read + cache_write
-            return [
-                UsageEvent(
-                    input_tokens=int(tokens.get("input") or 0) + cached,
-                    output_tokens=int(tokens.get("output") or 0) + int(tokens.get("reasoning") or 0),
-                    cost_usd=parsed.cost,
-                    cache_read_tokens=cache_read,
-                    cache_write_tokens=cache_write,
-                )
-            ]
+            return [usage_from_step_finish(parsed.tokens or {}, cost=parsed.cost)]
 
         return []
 
     def extract_session_id(self, raw_lines: list[str]) -> str | None:
-        for line in raw_lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                data = json.loads(stripped)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            sid = data.get("sessionID")
-            if isinstance(sid, str) and sid:
-                return sid
-        return None
+        return extract_session_id_from_json(raw_lines, keys=("sessionID",))
 
     def extract_text(self, raw_lines: list[str]) -> str:
         text_parts: list[str] = []
@@ -254,9 +222,7 @@ class OpencodeProvider:
         return "".join(text_parts).strip()
 
     def build_env(self) -> dict[str, str]:
-        import os
-
-        return dict(os.environ)
+        return default_build_env()
 
 
 class OpencodeFreeProvider(OpencodeProvider):
