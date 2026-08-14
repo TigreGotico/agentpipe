@@ -27,4 +27,12 @@ class Provider(Protocol):
 
     def extract_text(self, raw_lines: list[str]) -> str: ...
 
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """Name the failure this output reports, or None if it reports none.
+
+        A CLI that fails while exiting 0 is invisible to the exit code, and
+        its error text otherwise reaches the caller as an answer.
+        """
+        ...
+
     def build_env(self) -> dict[str, str]: ...

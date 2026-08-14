@@ -3,6 +3,11 @@ name: Publish Docker Image
 on:
   push:
     branches: [dev]
+  # The release job bumps the version with the bot token, and a bot push does
+  # not trigger a workflow, so the version that ships is never the one built on
+  # the push before it. Building on the published release closes that gap.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -25,9 +30,20 @@ jobs:
       - name: Set lowercase owner
         run: echo "OWNER_LOWER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
+      # :latest moves under a deployment's feet. Publishing the package version
+      # alongside it gives compose files something to pin to, and gives anyone
+      # debugging a running container a way to say which build it is.
+      - name: Read package version
+        run: |
+          VERSION=$(python -c "import runpy; print(runpy.run_path('agentpipe/version.py')['__version__'])")
+          echo "Publishing agentpipe $VERSION"
+          echo "AGENTPIPE_VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.OWNER_LOWER }}/agentpipe:latest
+          tags: |
+            ghcr.io/${{ env.OWNER_LOWER }}/agentpipe:latest
+            ghcr.io/${{ env.OWNER_LOWER }}/agentpipe:${{ env.AGENTPIPE_VERSION }}
