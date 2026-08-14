@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0a2](https://github.com/TigreGotico/agentpipe/tree/0.6.0a2) (2026-08-14)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.0a1...0.6.0a2)
+
+**Merged pull requests:**
+
+- docs: explain what to volume-map to share credentials with the container [\#32](https://github.com/TigreGotico/agentpipe/pull/32) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.6.0a1](https://github.com/TigreGotico/agentpipe/tree/0.6.0a1) (2026-08-14)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.5.2a1...0.6.0a1)
