@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -42,6 +43,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from ._types import GenerationResult
+
+logger = logging.getLogger(__name__)
 
 
 class ModelTier(int, Enum):
@@ -98,6 +101,7 @@ class CascadeResult:
 CASCADE_PROFILES: dict[str, list[str]] = {
     "default": [
         "opencode/big-pickle",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/gemini-3-flash",
         "opencode/deepseek-v4-flash-free",
@@ -110,6 +114,7 @@ CASCADE_PROFILES: dict[str, list[str]] = {
         "opencode/big-pickle",
         "opencode/deepseek-v4-flash-free",
         "opencode-gemini-3-flash-via-opencode",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/deepseek-v4-flash",
         "opencode/kimi-k2.6",
@@ -122,11 +127,13 @@ CASCADE_PROFILES: dict[str, list[str]] = {
         "opencode/minimax-m2.7",
         "opencode/glm-5",
         "opencode/minimax-m2.5",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/big-pickle",
     ],
     "fast-free": [
         "opencode/big-pickle",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/gemini-3-flash",
         "opencode/deepseek-v4-flash-free",
@@ -135,6 +142,7 @@ CASCADE_PROFILES: dict[str, list[str]] = {
         "opencode/big-pickle",
         "opencode/deepseek-v4-flash-free",
         "opencode/gemini-3-flash",
+        "antigravity-flash-medium",
         "gemini-2.5-flash",
         "opencode/mimo-v2.5-free",
         "opencode/nemotron-3-super-free",
@@ -144,35 +152,54 @@ CASCADE_PROFILES: dict[str, list[str]] = {
 MODEL_TIER_MAP: dict[str, ModelTier] = {
     "opencode/big-pickle": ModelTier.FREE,
     "gemini-2.5-flash": ModelTier.FREE,
+    "antigravity": ModelTier.FREE,
+    "antigravity-flash-medium": ModelTier.FREE,
+    "antigravity-flash-high": ModelTier.FREE,
+    "antigravity-flash-low": ModelTier.FREE,
     "opencode/gemini-3-flash": ModelTier.FREE,
     "opencode/deepseek-v4-flash-free": ModelTier.FREE,
     "opencode/mimo-v2.5-free": ModelTier.FREE,
     "opencode/nemotron-3-super-free": ModelTier.FREE,
     "opencode/minimax-m3-free": ModelTier.FREE,
+    "mimo/mimo-auto": ModelTier.FREE,
     "opencode/kimi-k2.5": ModelTier.CHEAP,
     "opencode/minimax-m2.5": ModelTier.CHEAP,
     "opencode-go/deepseek-v4-flash": ModelTier.CHEAP,
+    "antigravity-pro-low": ModelTier.MID,
+    "antigravity-pro-high": ModelTier.MID,
+    "antigravity-gpt-oss": ModelTier.MID,
     "opencode/kimi-k2.6": ModelTier.MID,
     "opencode/minimax-m2.7": ModelTier.MID,
     "opencode/glm-5": ModelTier.MID,
     "opencode/glm-5.1": ModelTier.MID,
     "opencode-go/glm-5.1": ModelTier.MID,
+    "xiaomi/mimo-v2-flash": ModelTier.CHEAP,
+    "xiaomi/mimo-v2.5-pro": ModelTier.MID,
     "opencode/gpt-5": ModelTier.PREMIUM,
     "opencode/qwen3.6-plus": ModelTier.PREMIUM,
     "opencode/qwen3.5-plus": ModelTier.PREMIUM,
     "opencode/gemini-3.1-pro": ModelTier.PREMIUM,
+    "antigravity-claude-sonnet": ModelTier.PREMIUM,
+    "antigravity-claude-opus": ModelTier.PREMIUM,
 }
 
 MODEL_PROVIDER_MAP: dict[str, str] = {
     "gemini-2.5-flash": "gemini",
     "gemini-2.5-pro": "gemini",
+    "mimo/mimo-auto": "mimo",
+    "xiaomi/mimo-v2-flash": "mimo",
+    "xiaomi/mimo-v2.5-pro": "mimo",
 }
 
+
 async def _call_on_attempt(callback: callable, attempt: CascadeAttempt) -> None:
-    if inspect.iscoroutinefunction(callback):
-        await callback(attempt)
-    else:
-        callback(attempt)
+    try:
+        if inspect.iscoroutinefunction(callback):
+            await callback(attempt)
+        else:
+            callback(attempt)
+    except Exception as e:
+        logger.warning("on_attempt callback raised %s: %s", type(e).__name__, e)
 
 
 _FREE_MODELS: frozenset[str] = frozenset(
@@ -188,6 +215,8 @@ _FREE_MODELS: frozenset[str] = frozenset(
 
 
 def _resolve_provider(model: str) -> str:
+    if model.startswith("antigravity"):
+        return model
     if model in MODEL_PROVIDER_MAP:
         return MODEL_PROVIDER_MAP[model]
     if model.startswith("opencode-go/"):
@@ -196,6 +225,8 @@ def _resolve_provider(model: str) -> str:
         return "opencode-free"
     if model.startswith("opencode/"):
         return "opencode-zen"
+    if model.startswith(("mimo/", "xiaomi/")):
+        return "mimo"
     raise ValueError(f"Cannot determine provider for model '{model}'")
 
 

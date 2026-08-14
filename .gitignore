@@ -5,3 +5,10 @@ __pycache__/
 dist/
 *.egg-info/
 .venv/
+.env
+.env.*
+!.env.example
+# Build artifacts. These were committed by accident once already.
+build/
+dist/
+*.egg-info/

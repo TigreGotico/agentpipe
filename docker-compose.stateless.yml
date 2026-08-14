@@ -1,0 +1,68 @@
+# agentpipe as a public, stateless OpenAI-compatible endpoint.
+#
+# The default compose file is built for a workstation: it mounts your project
+# and your provider logins so agents can work on your files. This one is built
+# for a server that answers strangers. It keeps no history, writes no state to
+# disk, and mounts nothing from the host.
+#
+#   docker compose -f docker-compose.stateless.yml up -d
+#   curl http://localhost:8000/v1/chat/completions \
+#     -H 'Content-Type: application/json' \
+#     -d '{"model": "opencode/deepseek-v4-flash-free",
+#          "messages": [{"role": "user", "content": "hello"}]}'
+#
+# Conversation history is the client's to keep: send it back as messages.
+
+services:
+  agentpipe:
+    build: .
+    image: ghcr.io/tigregotico/agentpipe:latest
+    container_name: agentpipe
+    restart: unless-stopped
+    ports:
+      - "${AGENTPIPE_PORT:-8000}:8000"
+    environment:
+      # Every request gets its own agent and no session is ever resumed.
+      # Without this, requests that carry no "user" all key to one agent named
+      # after the model, and that agent continues its last session.
+      AGENTPIPE_STATELESS: "1"
+      # Set to require a bearer token. Leave empty only behind a proxy that
+      # does its own authentication.
+      AGENTPIPE_API_KEY: "${AGENTPIPE_API_KEY:-}"
+      AGENTPIPE_MAX_PROMPT_LENGTH: "${AGENTPIPE_MAX_PROMPT_LENGTH:-100000}"
+      # How many provider subprocesses may run at once. Stateless mode has no
+      # shared per-agent lock, so this is what stops a burst of requests from
+      # starting a subprocess each.
+      AGENTPIPE_MAX_CONCURRENCY: "${AGENTPIPE_MAX_CONCURRENCY:-4}"
+    tmpfs:
+      # opencode records every conversation in a SQLite database under its
+      # share directory. Backing the state directories with memory keeps that
+      # history off disk and discards it when the container stops.
+      - /root/.local/share/opencode
+      - /root/.config/opencode
+      # kilo is opencode's sibling and keeps its own state under its own name.
+      # Without these two it dies on a read-only root with a bare Bun stack line.
+      - /root/.local/share/kilo
+      - /root/.config/kilo
+      # The remaining bundled CLIs each want one writable directory.
+      - /root/.gemini
+      - /root/.vibe
+      - /root/.qoder
+      # opencode creates run state on startup, and writes scratch to the
+      # working directory, so a read-only root needs both in memory.
+      - /root/.local/state
+      - /root/.cache
+      - /tmp:size=256m
+    # No host mounts: no project directory, and no provider login state. The
+    # free-tier models this deployment serves need no credentials.
+    mem_limit: ${AGENTPIPE_MEM_LIMIT:-4g}
+    # The server asks for no elevated permissions, but the provider CLIs are
+    # still programs run from a stranger's prompt. These bound what any of them
+    # can reach if one ignores the request.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    pids_limit: 256
+    cpus: ${AGENTPIPE_CPUS:-4.0}
