@@ -115,6 +115,55 @@ class TestAsyncSubprocessExecutorRunStreaming:
 
     @_needs_311
     @pytest.mark.asyncio
+    async def test_ansi_escapes_are_stripped_from_a_failed_process_error(self):
+        # A CLI that colours its own error output leaves raw ANSI escapes in
+        # the exception message. Those reach an HTTP response body or a log
+        # line verbatim and render as literal "←[91m" garbage for any client
+        # or log viewer that prints them, so they must be stripped before the
+        # error is ever raised.
+        executor = AsyncSubprocessExecutor()
+        spec = CommandSpec(
+            argv=[
+                sys.executable, "-c",
+                "import sys; sys.stderr.write("
+                "'\\x1b[91m\\x1b[1mError: \\x1b[0mModel not found\\n'); "
+                "sys.exit(1)",
+            ],
+            stdin="",
+            timeout=5.0,
+        )
+
+        with pytest.raises(AgentProcessError) as exc_info:
+            async for _ in executor.run_streaming(spec):
+                pass
+
+        assert "\x1b[" not in str(exc_info.value)
+        assert "\x1b[" not in exc_info.value.stderr
+        assert "Error: Model not found" in str(exc_info.value)
+
+    @_needs_311
+    @pytest.mark.asyncio
+    async def test_ansi_escapes_are_stripped_from_stdout_lines(self):
+        executor = AsyncSubprocessExecutor()
+        spec = CommandSpec(
+            argv=[
+                sys.executable, "-c",
+                "import sys; sys.stdout.write('\\x1b[32mok\\x1b[0m\\n')",
+            ],
+            stdin="",
+            timeout=5.0,
+        )
+
+        results = []
+        async for stream, line in executor.run_streaming(spec):
+            results.append((stream, line))
+
+        stdout = "".join(line for s, line in results if s == "stdout")
+        assert "\x1b[" not in stdout
+        assert "ok" in stdout
+
+    @_needs_311
+    @pytest.mark.asyncio
     async def test_streaming_without_stdin(self):
         executor = AsyncSubprocessExecutor()
         spec = CommandSpec(argv=["echo", "no stdin"], stdin="", timeout=5.0)
