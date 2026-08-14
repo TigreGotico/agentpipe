@@ -25,16 +25,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, field_validator
 
 from agentpipe import Agent, GenerationResult
+from agentpipe._agent import DEFAULT_MODELS, _PROVIDER_MAP
 from agentpipe._types import AgentEvent, ThinkingEvent, ToolCallEvent, ToolResultEvent, UsageEvent
 
 try:
@@ -50,16 +54,93 @@ app = FastAPI(
     version="0.2.0",
 )
 
+# --- Security: optional bearer-token auth via AGENTPIPE_API_KEY env var ---
+# An empty value means "no key", not "the empty key". Compose files pass
+# `AGENTPIPE_API_KEY: "${AGENTPIPE_API_KEY:-}"`, so an operator who sets no key
+# gets an empty string here, and treating that as a real key rejected every
+# request with 401 while the server looked healthy.
+_API_KEY: str | None = os.environ.get("AGENTPIPE_API_KEY", "").strip() or None
+_bearer_scheme = HTTPBearer(auto_error=False)
+_bearer_dep = Depends(_bearer_scheme)
+
+_MAX_PROMPT_LENGTH = int(os.environ.get("AGENTPIPE_MAX_PROMPT_LENGTH", "100000"))
+_ALLOWED_CWD_BASE: str = os.environ.get("AGENTPIPE_CWD", "/tmp")
+
+
+async def _require_auth(
+    credentials: HTTPAuthorizationCredentials | None = _bearer_dep,
+) -> None:
+    if _API_KEY is None:
+        return
+    if credentials is None or credentials.credentials != _API_KEY:
+        raise HTTPException(401, "Invalid or missing API key")
+
+
+def _validate_cwd(cwd: str) -> str:
+    """Resolve *cwd* and ensure it lives under the allowed base directory."""
+    try:
+        resolved = Path(cwd).resolve(strict=False)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, "Invalid working directory") from exc
+    allowed = Path(_ALLOWED_CWD_BASE).resolve(strict=False)
+    if not (resolved == allowed or allowed in resolved.parents):
+        raise HTTPException(
+            403,
+            f"Working directory must be under {_ALLOWED_CWD_BASE}",
+        )
+    return str(resolved)
+
+
+def _validate_prompt(prompt: str) -> str:
+    if len(prompt) > _MAX_PROMPT_LENGTH:
+        raise HTTPException(
+            413,
+            f"Prompt exceeds maximum length ({_MAX_PROMPT_LENGTH} chars)",
+        )
+    return prompt
+
 
 @dataclass
 class _ManagedAgent:
     agent: Agent
     session_id: str | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    last_used: float = field(default_factory=time.monotonic)
 
 
 _agents: dict[str, _ManagedAgent] = {}
 _MAX_AGENTS = 100
+_AGENT_TTL_SECONDS = float(os.environ.get("AGENTPIPE_AGENT_TTL", "3600"))
+# Serve each OpenAI request with its own agent and keep nothing afterwards.
+# Without this, a request that carries no "user" shares one agent with every
+# other such request, and that agent resumes its last session, so history
+# crosses between callers.
+_STATELESS = os.environ.get("AGENTPIPE_STATELESS", "").strip().lower() in ("1", "true", "yes", "on")
+# Stateless mode drops the shared per-agent lock and the _MAX_AGENTS ceiling,
+# which are what keep concurrent provider subprocesses bounded in the default
+# mode. This semaphore replaces them, so a burst of requests queues instead of
+# starting a subprocess each.
+_MAX_CONCURRENT = int(os.environ.get("AGENTPIPE_MAX_CONCURRENCY", "4"))
+_stateless_slots = asyncio.Semaphore(_MAX_CONCURRENT)
+
+# The OpenAI surface is a chat endpoint: it returns text and nothing else, so
+# the provider CLIs' file and shell tools are not needed to serve it. Left
+# unset, an approval mode of None is what makes the opencode provider ask for
+# --dangerously-skip-permissions. DEFAULT keeps the tools behind the CLI's own
+# permission prompts, which a non-interactive run cannot answer.
+# Set AGENTPIPE_OPENAI_APPROVAL to override for a deployment that wants them.
+from agentpipe._types import ApprovalMode
+
+_OPENAI_APPROVAL = os.environ.get("AGENTPIPE_OPENAI_APPROVAL", "").strip().lower()
+
+
+def _evict_stale_agents() -> None:
+    """Remove agents that have been idle longer than the TTL."""
+    now = time.monotonic()
+    stale = [name for name, ma in _agents.items() if now - ma.last_used > _AGENT_TTL_SECONDS]
+    for name in stale:
+        _agents.pop(name, None)
+        logger.info("Evicted idle agent '%s'", name)
 
 
 class AgentConfig(BaseModel):
@@ -90,6 +171,14 @@ class GenerateRequest(BaseModel):
     prompt: str
     stream: bool = False
 
+    @field_validator("prompt")
+    @classmethod
+    def check_prompt_length(cls, v: str) -> str:
+        if len(v) > _MAX_PROMPT_LENGTH:
+            msg = f"Prompt exceeds maximum length ({_MAX_PROMPT_LENGTH} chars)"
+            raise ValueError(msg)
+        return v
+
 
 class GenerateResponse(BaseModel):
     text: str
@@ -116,9 +205,10 @@ def _build_agent(name: str, req: CreateAgentRequest) -> Agent:
     if cfg.timeout:
         kwargs["timeout"] = cfg.timeout
     if cfg.cwd:
-        kwargs["cwd"] = cfg.cwd
+        kwargs["cwd"] = _validate_cwd(cfg.cwd)
     if cfg.approval_mode:
         from agentpipe._types import ApprovalMode
+
         kwargs["approval_mode"] = ApprovalMode(cfg.approval_mode)
     if cfg.sandbox:
         kwargs["sandbox"] = True
@@ -134,12 +224,13 @@ def _build_agent(name: str, req: CreateAgentRequest) -> Agent:
         kwargs["disallowed_tools"] = cfg.disallowed_tools
     if cfg.effort:
         from agentpipe._types import EffortLevel
+
         kwargs["effort"] = EffortLevel(cfg.effort)
     agent = Agent(cfg.provider, **kwargs)
     return agent
 
 
-@app.post("/agents")
+@app.post("/agents", dependencies=[Depends(_require_auth)])
 async def create_agent(req: CreateAgentRequest) -> AgentInfo:
     name = req.name or f"agent-{uuid4().hex[:8]}"
     if name in _agents:
@@ -159,7 +250,7 @@ async def create_agent(req: CreateAgentRequest) -> AgentInfo:
     )
 
 
-@app.get("/agents")
+@app.get("/agents", dependencies=[Depends(_require_auth)])
 async def list_agents() -> list[AgentInfo]:
     return [
         AgentInfo(
@@ -174,7 +265,7 @@ async def list_agents() -> list[AgentInfo]:
     ]
 
 
-@app.get("/agents/{name}")
+@app.get("/agents/{name}", dependencies=[Depends(_require_auth)])
 async def get_agent(name: str) -> AgentInfo:
     ma = _agents.get(name)
     if not ma:
@@ -189,7 +280,7 @@ async def get_agent(name: str) -> AgentInfo:
     )
 
 
-@app.delete("/agents/{name}")
+@app.delete("/agents/{name}", dependencies=[Depends(_require_auth)])
 async def delete_agent(name: str) -> dict:
     ma = _agents.pop(name, None)
     if not ma:
@@ -198,13 +289,14 @@ async def delete_agent(name: str) -> dict:
     return {"status": "deleted", "name": name}
 
 
-@app.post("/agents/{name}/generate")
+@app.post("/agents/{name}/generate", dependencies=[Depends(_require_auth)])
 async def generate(name: str, req: GenerateRequest) -> GenerateResponse:
     ma = _agents.get(name)
     if not ma:
         raise HTTPException(404, f"Agent '{name}' not found")
 
     async with ma.lock:
+        ma.last_used = time.monotonic()
         try:
             if ma.session_id:
                 ma.agent.continue_last = True
@@ -221,10 +313,10 @@ async def generate(name: str, req: GenerateRequest) -> GenerateResponse:
             )
         except Exception as e:
             logger.exception("Agent '%s' generate failed", name)
-            raise HTTPException(500, str(e)) from e
+            raise HTTPException(500, "Agent generation failed") from e
 
 
-@app.post("/agents/{name}/generate-stream")
+@app.post("/agents/{name}/generate-stream", dependencies=[Depends(_require_auth)])
 async def generate_stream(name: str, req: GenerateRequest):
     if EventSourceResponse is None:
         raise HTTPException(500, "sse-starlette not installed (pip install sse-starlette)")
@@ -245,8 +337,9 @@ async def generate_stream(name: str, req: GenerateRequest):
                         yield _serialize_event(event)
                     if sess.session_id:
                         ma.session_id = sess.session_id
-            except Exception as e:
-                yield {"event": "error", "data": json.dumps({"error": str(e)})}
+            except Exception:
+                logger.exception("Stream generation failed")
+                yield {"event": "error", "data": json.dumps({"error": "Agent generation failed"})}
 
     return EventSourceResponse(event_generator())
 
@@ -271,7 +364,7 @@ def _serialize_event(event: AgentEvent) -> dict:
     return {"event": data["type"], "data": json.dumps(data)}
 
 
-@app.get("/agents/{name}/session")
+@app.get("/agents/{name}/session", dependencies=[Depends(_require_auth)])
 async def get_session(name: str) -> dict:
     ma = _agents.get(name)
     if not ma:
@@ -279,18 +372,48 @@ async def get_session(name: str) -> dict:
     return {"name": name, "session_id": ma.session_id}
 
 
+# The OpenAI `model` field carries both the provider and the model, so the part
+# before the first slash has to name a provider. These are the prefixes the
+# provider CLIs actually emit in their own model strings.
+_MODEL_PREFIXES: dict[str, str] = {
+    "aider": "aider",
+    "openrouter": "aider",
+    "antigravity": "antigravity",
+    "claude": "claude",
+    "gemini": "gemini",
+    "kilo": "kilo",
+    "mimo": "mimo",
+    "xiaomi": "mimo",
+    "opencode": "opencode",
+    "opencode-go": "opencode-go",
+    "qoder": "qoder",
+    "vibe": "vibe",
+}
+
+
 def _model_to_provider(model: str) -> str:
-    prefix = model.split("/")[0].lower()
-    known: dict[str, str] = {
-        "aider": "aider",
-        "claude": "claude",
-        "gemini": "gemini",
-        "kilo": "kilo",
-        "opencode": "opencode",
-        "qoder": "qoder",
-        "vibe": "vibe",
-    }
-    return known.get(prefix, "kilo")
+    """Name the provider that serves *model*, or refuse.
+
+    A model this server cannot place used to fall through to kilo, which then
+    failed inside the CLI with an error that named neither the model nor the
+    provider. Refusing here says what went wrong.
+    """
+    name = model.strip()
+    if name in _PROVIDER_MAP:
+        # A bare provider alias, e.g. "opencode-free". The provider picks its
+        # own default model.
+        return name
+    prefix = name.split("/")[0].lower()
+    provider = _MODEL_PREFIXES.get(prefix)
+    if provider is None:
+        raise HTTPException(
+            400,
+            f"Unknown model '{model}'. Use one of the provider aliases "
+            f"({', '.join(sorted(_PROVIDER_MAP))}) or a model whose prefix "
+            f"names a provider ({', '.join(sorted(_MODEL_PREFIXES))}). "
+            "GET /v1/models lists the defaults.",
+        )
+    return provider
 
 
 def _messages_to_prompt(messages: list[dict]) -> str:
@@ -310,24 +433,69 @@ def _messages_to_prompt(messages: list[dict]) -> str:
     return "\n".join(parts)
 
 
-@app.post("/v1/chat/completions")
+def _build_openai_agent(provider: str, model: str | None) -> Agent:
+    """Build the agent that serves one OpenAI-compatible request."""
+    approval = ApprovalMode.DEFAULT
+    if _OPENAI_APPROVAL:
+        try:
+            approval = ApprovalMode(_OPENAI_APPROVAL)
+        except ValueError:
+            logger.warning("AGENTPIPE_OPENAI_APPROVAL=%r is not an approval "
+                           "mode; using %s", _OPENAI_APPROVAL, approval.value)
+    return Agent(provider, model=model, approval_mode=approval)
+
+
+@app.get("/v1/models", dependencies=[Depends(_require_auth)])
+async def openai_models() -> dict:
+    """List what the `model` field accepts, in the shape OpenAI clients expect.
+
+    Each entry is a provider alias. Its default model is listed too, and either
+    string is accepted as the `model` field.
+    """
+    created = int(time.time())
+    data = []
+    for alias in sorted(_PROVIDER_MAP):
+        default = DEFAULT_MODELS.get(alias)
+        data.append({"id": alias, "object": "model", "created": created,
+                     "owned_by": "agentpipe", "default_model": default})
+        if default and default != alias:
+            data.append({"id": default, "object": "model", "created": created,
+                         "owned_by": "agentpipe", "default_model": default})
+    return {"object": "list", "data": data}
+
+
+@app.post("/v1/chat/completions", dependencies=[Depends(_require_auth)])
 async def openai_chat_completions(body: dict):
     model = body.get("model", "kilo/kilo-auto/free")
     messages = body.get("messages", [])
     stream = body.get("stream", False)
     user_id = body.get("user", "")
 
+    prompt = _messages_to_prompt(messages)
+    _validate_prompt(prompt)
+
     agent_name = user_id or model.replace("/", "-").replace(":", "-")
     provider = _model_to_provider(model)
+    # A bare alias names no model, so let the provider use its own default.
+    model_arg = None if model.strip() in _PROVIDER_MAP else model
 
-    if agent_name not in _agents:
-        if len(_agents) >= _MAX_AGENTS:
-            raise HTTPException(503, "Agent store full")
-        _agents[agent_name] = _ManagedAgent(agent=Agent(provider, model=model))
-        logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
+    if _STATELESS:
+        # Not stored in _agents: nothing to look up, nothing to continue, and
+        # nothing left behind once the response is written. The shared slot
+        # limit stands in for the per-agent lock this mode does without.
+        ma = _ManagedAgent(agent=_build_openai_agent(provider, model_arg),
+                           lock=_stateless_slots)
+    else:
+        _evict_stale_agents()
+        if agent_name not in _agents:
+            if len(_agents) >= _MAX_AGENTS:
+                raise HTTPException(503, "Agent store full")
+            _agents[agent_name] = _ManagedAgent(
+                agent=_build_openai_agent(provider, model_arg))
+            logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
 
-    ma = _agents[agent_name]
-    prompt = _messages_to_prompt(messages)
+        ma = _agents[agent_name]
+        ma.last_used = time.monotonic()
 
     if stream:
         return await _openai_stream(ma, prompt, model)
@@ -336,11 +504,15 @@ async def openai_chat_completions(body: dict):
 
 async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
     async with ma.lock:
-        if ma.session_id:
-            ma.agent.continue_last = True
-        result = await ma.agent.generate_full(prompt)
-        if result.session_id:
-            ma.session_id = result.session_id
+        try:
+            if ma.session_id and not _STATELESS:
+                ma.agent.continue_last = True
+            result = await ma.agent.generate_full(prompt)
+            if result.session_id:
+                ma.session_id = result.session_id
+        except Exception as e:
+            logger.exception("OpenAI-compat completion failed for model '%s'", model)
+            raise HTTPException(500, str(e)) from e
 
     usage = result.usage or UsageEvent()
     return {
@@ -369,7 +541,7 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
 
     async def event_generator():
         async with ma.lock:
-            if ma.session_id:
+            if ma.session_id and not _STATELESS:
                 ma.agent.continue_last = True
 
             session = ma.agent.session()
@@ -393,9 +565,9 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
                             yield {"event": "data", "data": json.dumps(chunk)}
                     if sess.session_id:
                         ma.session_id = sess.session_id
-            except Exception as e:
-                logger.exception("Stream failed")
-                yield {"event": "data", "data": json.dumps({"error": str(e)})}
+            except Exception:
+                logger.exception("OpenAI-compat stream failed")
+                yield {"event": "data", "data": json.dumps({"error": "Agent generation failed"})}
 
         yield {"event": "data", "data": "[DONE]"}
 
@@ -419,6 +591,7 @@ Endpoints:
   POST /agents/{name}/generate          Send a prompt (blocking)
   POST /agents/{name}/generate-stream   Send a prompt (SSE stream)
   GET  /agents/{name}/session           Get session status
+  GET  /v1/models                       OpenAI-compatible model list
   POST /v1/chat/completions             OpenAI-compatible endpoint
   GET  /health                          Health check
 

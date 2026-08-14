@@ -7,7 +7,7 @@ Each provider has shortcuts that pre-fill the default model for a particular tie
 ```python
 from agentpipe import Agent
 
-# Aider — open-source, CLI-first (free via OpenRouter free tier)
+# Aider: open-source, CLI-first (free via OpenRouter free tier)
 Agent("aider")            # model="openrouter/google/gemma-4-26b-a4b-it:free"  (AiderProvider)
 
 # Claude family
@@ -21,10 +21,10 @@ Agent("gemini")           # model="gemini-2.5-flash"  (GeminiProvider)
 Agent("gemini-flash")     # model="gemini-2.5-flash"  (GeminiFlashProvider)
 Agent("gemini-pro")       # model="gemini-2.5-pro"   (GeminiProProvider)
 
-# Kilo Code — fork of OpenCode with free tier
+# Kilo Code: fork of OpenCode with free tier
 Agent("kilo")             # model="kilo/kilo-auto/free"  (KiloProvider)
 
-# OpenCode family — three plans
+# OpenCode family: three plans
 Agent("opencode")         # model="opencode/gemini-3-flash"  (OpencodeZenProvider)
 Agent("opencode-free")    # model="opencode/big-pickle"      (OpencodeFreeProvider)
 Agent("opencode-zen")     # model="opencode/gemini-3-flash"  (OpencodeZenProvider)
@@ -70,16 +70,16 @@ OpenCode has three distinct plans with different API endpoints, billing, and rat
 
 | Plan | Provider | Endpoint | Billing | Default Model |
 |------|----------|----------|---------|---------------|
-| **Free** | `opencode-free` | `opencode.ai/zen/v1` | $0 — free models only | `opencode/big-pickle` |
+| **Free** | `opencode-free` | `opencode.ai/zen/v1` | $0, free models only | `opencode/big-pickle` |
 | **Zen** | `opencode-zen` | `opencode.ai/zen/v1` | Pay-as-you-go | `opencode/gemini-3-flash` |
 | **Go** | `opencode-go` | `opencode.ai/zen/go/v1` | $5/$10 monthly subscription | `opencode-go/deepseek-v4-flash` |
 
 Key differences:
 
-- **Free** and **Zen** share the same API endpoint and API key. Free models (`big-pickle`, `gemini-3-flash`, `*-free` suffixes) cost $0; all other Zen models charge per token.
-- **Go** is a separate subscription with its own endpoint (`/zen/go/v1`), per-model rate limits (200–31K requests per 5 hours), and flat monthly billing.
-- The model prefix (`opencode/` vs `opencode-go/`) determines which endpoint is hit. Free and Zen both use `opencode/` prefix models; Go uses `opencode-go/` prefix.
-- All three use the same `opencode` binary — the model string routes the request.
+- Free and Zen share the same API endpoint and API key. Free models (`big-pickle`, `gemini-3-flash`, `*-free` suffixes) cost $0. All other Zen models charge per token.
+- Go is a separate subscription with its own endpoint (`/zen/go/v1`), per-model rate limits (200-31K requests per 5 hours), and flat monthly billing.
+- The model prefix (`opencode/` vs `opencode-go/`) determines which endpoint is hit. Free and Zen both use `opencode/` prefix models. Go uses the `opencode-go/` prefix.
+- All three plans use the same `opencode` binary. The model string routes the request.
 
 ```python
 # Free: $0 cost, limited models
@@ -119,3 +119,6 @@ summary = tier_summary()
 #  ModelTier.MID: [...],
 #  ModelTier.PREMIUM: [...]}
 ```
+
+---
+[← Getting Started](getting-started.md) · [Home](index.md) · [Core API →](core-api.md)
