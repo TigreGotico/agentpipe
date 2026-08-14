@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.1a1](https://github.com/TigreGotico/agentpipe/tree/0.6.1a1) (2026-08-14)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.0a2...0.6.1a1)
+
+**Merged pull requests:**
+
+- fix: strip ANSI escape codes from subprocess output [\#38](https://github.com/TigreGotico/agentpipe/pull/38) ([JarbasAl](https://github.com/JarbasAl))
+- fix: name the install command in the missing-CLI 503 [\#37](https://github.com/TigreGotico/agentpipe/pull/37) ([JarbasAl](https://github.com/JarbasAl))
+- fix: OpenAI-compatible streaming route never sends a terminal finish\_reason [\#36](https://github.com/TigreGotico/agentpipe/pull/36) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.6.0a2](https://github.com/TigreGotico/agentpipe/tree/0.6.0a2) (2026-08-14)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.0a1...0.6.0a2)
