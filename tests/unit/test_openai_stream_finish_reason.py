@@ -39,8 +39,15 @@ class _FakeSession:
         yield ThinkingEvent(text="hello world")
 
 
+class _FakeProviderInstance:
+    # The route looks the CLI up in PATH before it runs anything, so this
+    # names a binary that is always there.
+    binary_name = "sh"
+
+
 class _FakeAgent:
     continue_last = False
+    _provider_instance = _FakeProviderInstance()
 
     def session(self):
         return _FakeSession()

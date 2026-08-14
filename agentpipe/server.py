@@ -111,15 +111,14 @@ class _ManagedAgent:
 _agents: dict[str, _ManagedAgent] = {}
 _MAX_AGENTS = 100
 _AGENT_TTL_SECONDS = float(os.environ.get("AGENTPIPE_AGENT_TTL", "3600"))
-# Serve each OpenAI request with its own agent and keep nothing afterwards.
-# Without this, a request that carries no "user" shares one agent with every
-# other such request, and that agent resumes its last session, so history
-# crosses between callers.
+# Refuse to keep a session even for a request that names a "user". The OpenAI
+# surface isolates anonymous requests on its own (see openai_chat_completions),
+# so this is for a deployment that wants no server-side history at all.
 _STATELESS = os.environ.get("AGENTPIPE_STATELESS", "").strip().lower() in ("1", "true", "yes", "on")
-# Stateless mode drops the shared per-agent lock and the _MAX_AGENTS ceiling,
-# which are what keep concurrent provider subprocesses bounded in the default
-# mode. This semaphore replaces them, so a burst of requests queues instead of
-# starting a subprocess each.
+# A per-request agent has no shared lock and does not count against _MAX_AGENTS,
+# and those are what keep concurrent provider subprocesses bounded. This
+# semaphore replaces them, so a burst of requests queues instead of starting a
+# subprocess each.
 _MAX_CONCURRENT = int(os.environ.get("AGENTPIPE_MAX_CONCURRENCY", "4"))
 _stateless_slots = asyncio.Semaphore(_MAX_CONCURRENT)
 
@@ -510,27 +509,30 @@ async def openai_chat_completions(body: dict):
     prompt = _messages_to_prompt(messages)
     _validate_prompt(prompt)
 
-    agent_name = user_id or model.replace("/", "-").replace(":", "-")
     provider = _model_to_provider(model)
     # A bare alias names no model, so let the provider use its own default.
     model_arg = None if model.strip() in _PROVIDER_MAP else model
 
-    if _STATELESS:
+    # A chat completion is independent of every other one unless the caller
+    # says otherwise, and the only way a caller says otherwise here is the
+    # "user" field. Keying on the model string instead put every caller of
+    # that model on one running conversation, and the answers bled across.
+    if _STATELESS or not user_id:
         # Not stored in _agents: nothing to look up, nothing to continue, and
         # nothing left behind once the response is written. The shared slot
-        # limit stands in for the per-agent lock this mode does without.
+        # limit stands in for the per-agent lock this path does without.
         ma = _ManagedAgent(agent=_build_openai_agent(provider, model_arg),
                            lock=_stateless_slots)
     else:
         _evict_stale_agents()
-        if agent_name not in _agents:
+        if user_id not in _agents:
             if len(_agents) >= _MAX_AGENTS:
                 raise HTTPException(503, "Agent store full")
-            _agents[agent_name] = _ManagedAgent(
+            _agents[user_id] = _ManagedAgent(
                 agent=_build_openai_agent(provider, model_arg))
-            logger.info("Auto-created agent '%s' from model '%s'", agent_name, model)
+            logger.info("Auto-created agent '%s' from model '%s'", user_id, model)
 
-        ma = _agents[agent_name]
+        ma = _agents[user_id]
         ma.last_used = time.monotonic()
 
     if stream:
@@ -546,7 +548,9 @@ async def _openai_complete(ma: _ManagedAgent, prompt: str, model: str) -> dict:
         raise HTTPException(503, _missing_cli_message(binary_name))
     async with ma.lock:
         try:
-            if ma.session_id and not _STATELESS:
+            # A per-request agent is fresh, so it has no session and cannot
+            # resume one. Only an agent kept for a named "user" ever does.
+            if ma.session_id:
                 ma.agent.continue_last = True
             result = await ma.agent.generate_full(prompt)
             if result.session_id:
@@ -588,7 +592,9 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
 
     async def event_generator():
         async with ma.lock:
-            if ma.session_id and not _STATELESS:
+            # Same as the blocking path: only a "user"-keyed agent has a
+            # session to continue.
+            if ma.session_id:
                 ma.agent.continue_last = True
 
             session = ma.agent.session()
@@ -676,8 +682,8 @@ OpenAI-compatible endpoint — point any OpenAI client at this server:
     -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Hello"}]}'
 
   Use the model name as provider/model. The model prefix determines the
-  provider (kilo/, claude/, gemini/, opencode/, aider/, etc.). Agents
-  are auto-created and sessions persist via the 'user' field.
+  provider (kilo/, claude/, gemini/, opencode/, aider/, etc.). Each
+  request is independent; send a 'user' field to keep a session.
 
 Examples:
   curl -X POST http://localhost:8000/agents \\
