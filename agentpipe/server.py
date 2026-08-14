@@ -37,7 +37,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, field_validator
 
-from agentpipe import Agent, GenerationResult
+from agentpipe import Agent, GenerationResult, ProviderOutputError
 from agentpipe._agent import DEFAULT_MODELS, _PROVIDER_MAP
 from agentpipe._types import AgentEvent, ThinkingEvent, ToolCallEvent, ToolResultEvent, UsageEvent
 
@@ -414,6 +414,14 @@ def _missing_cli_message(binary_name: str) -> str:
     return f"Provider CLI '{binary_name}' is not installed or not in PATH"
 
 
+# The leading segment of every model the providers name themselves. A prefix
+# in here belongs to the model; anything else only picked the provider and has
+# to come off before the CLI sees it.
+_MODEL_NAMESPACES: set[str] = {
+    default.split("/")[0].lower() for default in DEFAULT_MODELS.values() if "/" in default
+}
+
+
 def _model_to_provider(model: str) -> str:
     """Name the provider that serves *model*, or refuse.
 
@@ -421,11 +429,25 @@ def _model_to_provider(model: str) -> str:
     failed inside the CLI with an error that named neither the model nor the
     provider. Refusing here says what went wrong.
     """
+    return _route_model(model)[0]
+
+
+def _route_model(model: str) -> tuple[str, str | None]:
+    """Split *model* into the provider that serves it and the model it names.
+
+    Some prefixes route and nothing more: "aider/" picks the provider, and the
+    CLI behind it never heard of a model called "aider/something". Others are
+    part of the name the CLI expects — kilo's own models really are called
+    "kilo/...", and aider's are called "openrouter/...". The model namespaces
+    the providers themselves use tell the two apart, so a new provider needs
+    no extra table here.
+
+    The returned model is None for a bare provider alias, which names no model
+    and lets the provider choose its own default.
+    """
     name = model.strip()
     if name in _PROVIDER_MAP:
-        # A bare provider alias, e.g. "opencode-free". The provider picks its
-        # own default model.
-        return name
+        return name, None
     prefix = name.split("/")[0].lower()
     provider = _MODEL_PREFIXES.get(prefix)
     if provider is None:
@@ -436,7 +458,9 @@ def _model_to_provider(model: str) -> str:
             f"names a provider ({', '.join(sorted(_MODEL_PREFIXES))}). "
             "GET /v1/models lists the defaults.",
         )
-    return provider
+    if "/" in name and prefix not in _MODEL_NAMESPACES:
+        return provider, name.split("/", 1)[1]
+    return provider, name
 
 
 def _messages_to_prompt(messages: list[dict]) -> str:
@@ -509,9 +533,7 @@ async def openai_chat_completions(body: dict):
     prompt = _messages_to_prompt(messages)
     _validate_prompt(prompt)
 
-    provider = _model_to_provider(model)
-    # A bare alias names no model, so let the provider use its own default.
-    model_arg = None if model.strip() in _PROVIDER_MAP else model
+    provider, model_arg = _route_model(model)
 
     # A chat completion is independent of every other one unless the caller
     # says otherwise, and the only way a caller says otherwise here is the
@@ -632,8 +654,15 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
                         ],
                     }
                     yield {"event": "data", "data": json.dumps(final_chunk)}
-            except Exception:
+            except Exception as e:
                 logger.exception("OpenAI-compat stream failed")
+                # "stop" here told every OpenAI client the answer finished
+                # normally, and the extra "error" key is not part of the
+                # schema so the SDKs drop it: a failure arrived as a short
+                # but successful reply. The clients do read finish_reason,
+                # and a provider failure is not a stop.
+                detail = str(e) if isinstance(e, ProviderOutputError) \
+                    else "Agent generation failed"
                 error_chunk = {
                     "id": "chatcmpl-stream",
                     "object": "chat.completion.chunk",
@@ -643,10 +672,10 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
                         {
                             "index": 0,
                             "delta": {},
-                            "finish_reason": "stop",
+                            "finish_reason": "error",
                         }
                     ],
-                    "error": "Agent generation failed",
+                    "error": {"message": detail, "type": "provider_error"},
                 }
                 yield {"event": "data", "data": json.dumps(error_chunk)}
 

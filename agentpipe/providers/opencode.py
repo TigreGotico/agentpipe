@@ -210,6 +210,10 @@ class OpencodeProvider:
     def extract_session_id(self, raw_lines: list[str]) -> str | None:
         return extract_session_id_from_json(raw_lines, keys=("sessionID",))
 
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """This CLI reports its failures through a non-zero exit code."""
+        return None
+
     def extract_text(self, raw_lines: list[str]) -> str:
         text_parts: list[str] = []
         for line in raw_lines:

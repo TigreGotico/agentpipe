@@ -1,5 +1,5 @@
 from ._agent import DEFAULT_CWD, DEFAULT_MODELS, Agent
-from ._executor import AgentProcessError, AsyncSubprocessExecutor
+from ._executor import AgentProcessError, AsyncSubprocessExecutor, ProviderOutputError
 from ._pipeline import delegate, fan_out, map_concurrent, retry_until
 from ._quota import QuotaStatus, check_quota, parse_rate_limit_error
 from ._session import AgentSession
@@ -68,6 +68,7 @@ __all__ = [
     "Agent",
     "__version__",
     "AgentProcessError",
+    "ProviderOutputError",
     "AgentSession",
     "AgentEvent",
     "AiderProvider",

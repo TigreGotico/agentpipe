@@ -40,6 +40,15 @@ opt into a server-side session — requests that carry the same `user` share one
 agent and one conversation, so a multi-turn client can leave history out of the
 request body.
 
+The part before the first slash names the provider. It is removed before the
+CLI sees the model unless it is a namespace the provider uses itself, so
+`aider/openrouter/google/...` reaches aider as `openrouter/google/...` while
+`kilo/kilo-auto/free` reaches kilo unchanged.
+
+When the provider fails, the response is an HTTP error. A failure is never
+answered with 200 and the error text in the assistant message, which a client
+would read as a real reply.
+
 This surface is a chat endpoint, so its agents are built with the `default`
 approval mode and the provider CLIs' file and shell tools stay behind their own
 permission prompts, which a non-interactive run cannot answer. Set
