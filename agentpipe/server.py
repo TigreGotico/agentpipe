@@ -565,9 +565,37 @@ async def _openai_stream(ma: _ManagedAgent, prompt: str, model: str):
                             yield {"event": "data", "data": json.dumps(chunk)}
                     if sess.session_id:
                         ma.session_id = sess.session_id
+                    final_chunk = {
+                        "id": "chatcmpl-stream",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                    }
+                    yield {"event": "data", "data": json.dumps(final_chunk)}
             except Exception:
                 logger.exception("OpenAI-compat stream failed")
-                yield {"event": "data", "data": json.dumps({"error": "Agent generation failed"})}
+                error_chunk = {
+                    "id": "chatcmpl-stream",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "error": "Agent generation failed",
+                }
+                yield {"event": "data", "data": json.dumps(error_chunk)}
 
         yield {"event": "data", "data": "[DONE]"}
 
