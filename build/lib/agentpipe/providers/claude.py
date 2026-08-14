@@ -1,0 +1,364 @@
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field
+from typing import Any
+
+from .._types import (
+    AgentEvent,
+    ApprovalMode,
+    McpServerConfig,
+    ThinkingEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
+from ._utils import ToolTracker, build_mcp_config_json, usage_from_anthropic
+
+
+@dataclass
+class _ClaudeParsedEvent:
+    pass
+
+
+@dataclass
+class _SystemEvent(_ClaudeParsedEvent):
+    session_id: str | None = None
+
+
+@dataclass
+class _TextEvent(_ClaudeParsedEvent):
+    text: str = ""
+
+
+@dataclass
+class _ToolUseEvent(_ClaudeParsedEvent):
+    tool_name: str = ""
+    tool_id: str | None = None
+    parameters: Any = None
+
+
+@dataclass
+class _ToolResultInternalEvent(_ClaudeParsedEvent):
+    output: str = ""
+    tool_id: str | None = None
+
+
+@dataclass
+class _MultiEvent(_ClaudeParsedEvent):
+    events: list[_ClaudeParsedEvent] = field(default_factory=list)
+    usage: dict[str, Any] | None = None
+
+
+@dataclass
+class _ResultInternalEvent(_ClaudeParsedEvent):
+    result: str = ""
+    num_turns: int | None = None
+    usage: dict[str, Any] | None = None
+    total_cost_usd: float | None = None
+    duration_ms: int | None = None
+
+
+def _parse_claude_line(line: str) -> _ClaudeParsedEvent | None:
+    try:
+        data = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    event_type = data.get("type")
+
+    if event_type == "system":
+        return _SystemEvent(session_id=data.get("session_id"))
+
+    if event_type == "assistant":
+        message = data.get("message", {})
+        content_blocks = message.get("content", [])
+        events: list[_ClaudeParsedEvent] = []
+        for block in content_blocks:
+            block_type = block.get("type")
+            if block_type == "text":
+                events.append(_TextEvent(text=block.get("text", "")))
+            elif block_type == "tool_use":
+                events.append(
+                    _ToolUseEvent(
+                        tool_name=block.get("name", ""),
+                        tool_id=block.get("id"),
+                        parameters=block.get("input"),
+                    )
+                )
+        usage = message.get("usage")
+        return _MultiEvent(events=events, usage=usage) if events else None
+
+    if event_type == "user":
+        message = data.get("message", {})
+        content_blocks = message.get("content", [])
+        for block in content_blocks:
+            if block.get("type") == "tool_result":
+                output = block.get("content", "")
+                if isinstance(output, list):
+                    output = "\n".join(str(item) for item in output)
+                return _ToolResultInternalEvent(
+                    output=str(output) if output else "",
+                    tool_id=block.get("tool_use_id"),
+                )
+        return None
+
+    if event_type == "result":
+        return _ResultInternalEvent(
+            result=data.get("result", ""),
+            num_turns=data.get("num_turns"),
+            usage=data.get("usage"),
+            total_cost_usd=data.get("total_cost_usd"),
+            duration_ms=data.get("duration_ms"),
+        )
+
+    return None
+
+
+_APPROVAL_MODE_MAP: dict[ApprovalMode, str] = {
+    ApprovalMode.DEFAULT: "default",
+    ApprovalMode.AUTO_EDIT: "acceptEdits",
+    ApprovalMode.YOLO: "bypassPermissions",
+    ApprovalMode.PLAN: "plan",
+    ApprovalMode.BYPASS: "bypassPermissions",
+}
+
+
+class ClaudeProvider:
+    def __init__(
+        self,
+        model: str | None = None,
+        *,
+        mcp_servers: list[McpServerConfig] | None = None,
+        approval_mode: ApprovalMode | None = None,
+        max_budget_usd: float | None = None,
+        system_prompt: str | None = None,
+        append_system_prompt: str | None = None,
+        allowed_tools: list[str] | None = None,
+        disallowed_tools: list[str] | None = None,
+        effort: str | None = None,
+        fallback_model: str | None = None,
+        json_schema: dict | None = None,
+        agent_name: str | None = None,
+        sandbox: bool = False,
+        raw_output: bool = False,
+        include_dirs: list[str] | None = None,
+        session_name: str | None = None,
+        continue_last: bool = False,
+        fork_session: bool = False,
+        files: list[str] | None = None,
+    ) -> None:
+        self._model = model
+        self._mcp_servers = mcp_servers or []
+        self._approval_mode = approval_mode
+        self._max_budget_usd = max_budget_usd
+        self._system_prompt = system_prompt
+        self._append_system_prompt = append_system_prompt
+        self._allowed_tools = allowed_tools
+        self._disallowed_tools = disallowed_tools
+        self._effort = effort
+        self._fallback_model = fallback_model
+        self._json_schema = json_schema
+        self._agent_name = agent_name
+        self._sandbox = sandbox
+        self._raw_output = raw_output
+        self._include_dirs = include_dirs
+        self._session_name = session_name
+        self._continue_last = continue_last
+        self._fork_session = fork_session
+        self._files = files
+        self._tools = ToolTracker()
+
+    @property
+    def binary_name(self) -> str:
+        return "claude"
+
+    @property
+    def model(self) -> str | None:
+        return self._model
+
+    def build_command(
+        self,
+        prompt: str,
+        *,
+        session_id: str | None = None,
+        model: str | None = None,
+    ) -> list[str]:
+        skips_permissions = (
+            self._approval_mode is None
+            or self._approval_mode == ApprovalMode.BYPASS
+            or self._approval_mode == ApprovalMode.YOLO
+        )
+        permission_flag = "--dangerously-skip-permissions" if skips_permissions else "--permission-mode"
+        cmd = [
+            self.binary_name,
+            "-p",
+            permission_flag,
+        ]
+
+        if self._approval_mode is not None and self._approval_mode not in (ApprovalMode.BYPASS, ApprovalMode.YOLO):
+            cmd.pop()
+            cmd.extend(["--permission-mode", _APPROVAL_MODE_MAP[self._approval_mode]])
+
+        if self._system_prompt:
+            cmd.extend(["--system-prompt", self._system_prompt])
+        if self._append_system_prompt:
+            cmd.extend(["--append-system-prompt", self._append_system_prompt])
+        if self._allowed_tools:
+            for tool in self._allowed_tools:
+                cmd.extend(["--allowedTools", tool])
+        if self._disallowed_tools:
+            for tool in self._disallowed_tools:
+                cmd.extend(["--disallowedTools", tool])
+        if self._effort:
+            cmd.extend(["--effort", self._effort])
+        if self._fallback_model:
+            cmd.extend(["--fallback-model", self._fallback_model])
+        if self._json_schema:
+            cmd.extend(["--output-format", "json", "--json-schema", json.dumps(self._json_schema)])
+        elif not self._raw_output:
+            cmd.extend(["--output-format", "stream-json", "--verbose"])
+        else:
+            cmd.extend(["--output-format", "stream-json"])
+
+        if session_id:
+            cmd.extend(["--resume", session_id])
+
+        if self._sandbox:
+            cmd.append("--sandbox")
+
+        if self._agent_name:
+            cmd.extend(["--agent", self._agent_name])
+
+        if self._session_name:
+            cmd.extend(["--name", self._session_name])
+
+        if self._continue_last:
+            cmd.append("--continue")
+
+        if self._fork_session and (session_id or self._continue_last):
+            cmd.append("--fork-session")
+
+        if self._include_dirs:
+            for d in self._include_dirs:
+                cmd.extend(["--add-dir", d])
+
+        if self._files:
+            for f in self._files:
+                cmd.extend(["--file", f])
+
+        cmd.append(prompt)
+
+        effective_model = model or self._model
+        if effective_model:
+            cmd.extend(["--model", effective_model])
+
+        if self._mcp_servers:
+            cmd.extend(["--mcp-config", build_mcp_config_json(self._mcp_servers), "--strict-mcp-config"])
+
+        if self._max_budget_usd is not None:
+            cmd.extend(["--max-budget-usd", str(self._max_budget_usd)])
+
+        return cmd
+
+    def parse_event_line(self, line: str) -> list[AgentEvent]:
+        stripped = line.strip()
+        if not stripped:
+            return []
+
+        parsed = _parse_claude_line(stripped)
+        if parsed is None:
+            return [ThinkingEvent(text=stripped)]
+
+        if isinstance(parsed, _MultiEvent):
+            events: list[AgentEvent] = []
+            for sub in parsed.events:
+                events.extend(self._convert_internal_event(sub))
+            return events
+
+        return self._convert_internal_event(parsed)
+
+    def _convert_internal_event(self, parsed: _ClaudeParsedEvent) -> list[AgentEvent]:
+        if isinstance(parsed, _TextEvent):
+            return [ThinkingEvent(text=parsed.text)]
+
+        if isinstance(parsed, _ToolUseEvent):
+            if parsed.tool_id:
+                self._tools.record(parsed.tool_id, parsed.tool_name)
+            return [
+                ToolCallEvent(
+                    tool=parsed.tool_name,
+                    args=parsed.parameters,
+                    tool_id=parsed.tool_id,
+                )
+            ]
+
+        if isinstance(parsed, _ToolResultInternalEvent):
+            base = self._tools.resolve(parsed.tool_id)
+            return [
+                ToolResultEvent(
+                    tool=base.tool,
+                    output=parsed.output,
+                    duration_ms=base.duration_ms,
+                )
+            ]
+
+        if isinstance(parsed, _ResultInternalEvent):
+            return [usage_from_anthropic(parsed.usage or {}, cost_usd=parsed.total_cost_usd)]
+
+        if isinstance(parsed, _SystemEvent):
+            return []
+
+        return []
+
+    def extract_session_id(self, raw_lines: list[str]) -> str | None:
+        for line in raw_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parsed = _parse_claude_line(stripped)
+            if isinstance(parsed, _SystemEvent) and parsed.session_id:
+                return parsed.session_id
+        return None
+
+    def extract_text(self, raw_lines: list[str]) -> str:
+        text_parts: list[str] = []
+        for line in raw_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parsed = _parse_claude_line(stripped)
+            if isinstance(parsed, _TextEvent):
+                text_parts.append(parsed.text)
+            elif isinstance(parsed, _ResultInternalEvent) and parsed.result:
+                return parsed.result
+        return "".join(text_parts).strip()
+
+    def build_env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        env.setdefault("CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR", "1")
+        return env
+
+
+class ClaudeSonnetProvider(ClaudeProvider):
+    """Claude Sonnet — flagship coding/following model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("model", "sonnet")
+        super().__init__(**kwargs)
+
+
+class ClaudeHaikuProvider(ClaudeProvider):
+    """Claude Haiku — fast, cheap model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("model", "haiku")
+        super().__init__(**kwargs)
+
+
+class ClaudeOpusProvider(ClaudeProvider):
+    """Claude Opus — premium reasoning model."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("model", "opus")
+        super().__init__(**kwargs)
