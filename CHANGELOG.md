@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2a1](https://github.com/TigreGotico/agentpipe/tree/0.5.2a1) (2026-08-14)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.5.1a1...0.5.2a1)
+
+**Merged pull requests:**
+
+- fix: route every provider on the OpenAI endpoint and refuse the rest [\#25](https://github.com/TigreGotico/agentpipe/pull/25) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.5.1a1](https://github.com/TigreGotico/agentpipe/tree/0.5.1a1) (2026-08-13)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.5.0a1...0.5.1a1)
