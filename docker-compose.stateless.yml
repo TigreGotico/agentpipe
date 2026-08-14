@@ -40,6 +40,14 @@ services:
       # history off disk and discards it when the container stops.
       - /root/.local/share/opencode
       - /root/.config/opencode
+      # kilo is opencode's sibling and keeps its own state under its own name.
+      # Without these two it dies on a read-only root with a bare Bun stack line.
+      - /root/.local/share/kilo
+      - /root/.config/kilo
+      # The remaining bundled CLIs each want one writable directory.
+      - /root/.gemini
+      - /root/.vibe
+      - /root/.qoder
       # opencode creates run state on startup, and writes scratch to the
       # working directory, so a read-only root needs both in memory.
       - /root/.local/state
