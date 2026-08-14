@@ -85,7 +85,18 @@ curl http://localhost:8000/v1/chat/completions \
   -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write code"}],"stream":true}'
 ```
 
-Returns OpenAI-compatible SSE chunks with `[DONE]` termination.
+Returns OpenAI-compatible SSE chunks and always ends with a chunk carrying
+`finish_reason: "stop"` right before `[DONE]`, so strict clients that wait
+for a terminal `finish_reason` do not hang.
+
+Whether the content arrives token-by-token depends on the underlying CLI.
+`claude`, `gemini`, and `qoder` run with a streaming JSON output mode, so
+agentpipe forwards their output as it is produced and you get real
+incremental chunks. `aider`, `antigravity`, `kilo`, `mimocode`, `opencode`,
+and `vibe` do not have a streaming CLI mode agentpipe can use, so their
+answer arrives as a single content chunk once the CLI process finishes,
+followed immediately by the terminal chunk. Both cases are valid
+OpenAI-compatible streams; only the first group gives a latency benefit.
 
 ## Native API: Persistent Sessions
 
