@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.4a1](https://github.com/TigreGotico/agentpipe/tree/0.6.4a1) (2026-08-14)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.3a1...0.6.4a1)
+
+**Merged pull requests:**
+
+- fix: stop serving provider failures as assistant answers [\#40](https://github.com/TigreGotico/agentpipe/pull/40) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.6.3a1](https://github.com/TigreGotico/agentpipe/tree/0.6.3a1) (2026-08-14)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.2a1...0.6.3a1)
