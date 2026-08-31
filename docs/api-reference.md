@@ -82,18 +82,30 @@ class Agent:
 | `generate_stream` | `(self, prompt, *, cwd=None, timeout=None)` | `AsyncIterator[AgentEvent]` | All |
 | `generate_full` | `(self, prompt, *, cwd=None, timeout=None)` | `GenerationResult` | All |
 | `session` | `(self, *, cwd=None, timeout=None)` | `AgentSession` | All |
+
+| Method | Signature | Return | Providers |
+|---|---|---|---|
 | `check_available` | `(self)` | `str` | All |
 | `auth_status` | `(self)` | `AuthStatus` | All |
 | `auth_login` | `(self, *, method=None)` | `AuthStatus` | Claude, OpenCode |
 | `auth_logout` | `(self)` | `AuthStatus` | Claude, OpenCode |
+
+| Method | Signature | Return | Providers |
+|---|---|---|---|
 | `list_sessions` | `(self, *, cwd=None)` | `list[SessionEntry]` | Gemini, OpenCode |
 | `delete_session` | `(self, session_id, *, cwd=None)` | `bool` | OpenCode |
 | `export_session` | `(self, session_id, *, cwd=None)` | `SessionExport` | OpenCode |
 | `import_session` | `(self, data, *, cwd=None)` | `str \| None` | OpenCode |
+
+| Method | Signature | Return | Providers |
+|---|---|---|---|
 | `list_models` | `(self)` | `list[ModelInfo]` | OpenCode |
 | `stats` | `(self, *, days=None, cwd=None)` | `dict` | OpenCode |
 | `mcp_add` | `(self, name, *, url=None, command=None, args=None, env=None, headers=None, scope=None)` | `bool` | Claude, OpenCode |
 | `mcp_remove` | `(self, name, *, scope=None)` | `bool` | Claude, OpenCode |
+
+| Method | Signature | Return | Providers |
+|---|---|---|---|
 | `mcp_list` | `(self)` | `list[McpServerInfo]` | Claude, OpenCode |
 | `list_extensions` | `(self)` | `list[ExtensionInfo]` | Gemini |
 | `doctor` | `(self)` | `dict` | Claude |
@@ -106,14 +118,23 @@ class Agent:
 | `DEFAULT_MODELS["aider"]` | `"openrouter/google/gemma-4-26b-a4b-it:free"` |
 | `DEFAULT_MODELS["claude"]` | `"sonnet"` |
 | `DEFAULT_MODELS["claude-sonnet"]` | `"sonnet"` |
+
+| Constant | Value |
+|---|---|
 | `DEFAULT_MODELS["claude-haiku"]` | `"haiku"` |
 | `DEFAULT_MODELS["claude-opus"]` | `"opus"` |
 | `DEFAULT_MODELS["gemini"]` | `"gemini-2.5-flash"` |
 | `DEFAULT_MODELS["gemini-flash"]` | `"gemini-2.5-flash"` |
+
+| Constant | Value |
+|---|---|
 | `DEFAULT_MODELS["gemini-pro"]` | `"gemini-2.5-pro"` |
 | `DEFAULT_MODELS["kilo"]` | `"kilo/kilo-auto/free"` |
 | `DEFAULT_MODELS["opencode"]` | `"opencode/gemini-3-flash"` |
 | `DEFAULT_MODELS["opencode-free"]` | `"opencode/big-pickle"` |
+
+| Constant | Value |
+|---|---|
 | `DEFAULT_MODELS["opencode-zen"]` | `"opencode/gemini-3-flash"` |
 | `DEFAULT_MODELS["opencode-go"]` | `"opencode-go/deepseek-v4-flash"` |
 | `DEFAULT_MODELS["qoder"]` | `"mistral-large-latest"` |
@@ -228,6 +249,9 @@ McpServerConfig = HttpMcpServer | StdioMcpServer
 | `cascade_coding` | `(prompt, *, max_tier=CHEAP, **kwargs)` | `CascadeResult` |
 | `cascade_fast_free` | `(prompt, **kwargs)` | `CascadeResult` |
 | `cascade_free_only` | `(prompt, **kwargs)` | `CascadeResult` |
+
+| Function | Signature | Return |
+|---|---|---|
 | `tier_summary` | `()` | `dict[ModelTier, list[dict]]` |
 
 ## Pipeline Functions
@@ -245,3 +269,6 @@ McpServerConfig = HttpMcpServer | StdioMcpServer
 |---|---|---|
 | `check_quota` | `(provider=None, *, model=None, executor=None)` | `QuotaStatus` |
 | `parse_rate_limit_error` | `(provider, error)` | `dict` with `provider`, `rate_limited`, `resets_in_seconds` |
+
+---
+[← Feature Matrix](feature-matrix.md) · [Home](index.md)

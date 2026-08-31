@@ -28,6 +28,14 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.11",
+    # The server tests exercise the real FastAPI app through its HTTP surface.
+    # Without these they were skipped, and CI was green on an untested server.
+    # starlette's test client moved to httpx2 in 1.6; an older starlette imports
+    # plain httpx and the whole test module dies on import instead of running.
+    "fastapi",
+    "starlette>=1.6",
+    "httpx2>=2.10",
+    "sse-starlette",
 ]
 
 [tool.setuptools.dynamic]
