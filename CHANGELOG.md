@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.4a2](https://github.com/TigreGotico/agentpipe/tree/0.6.4a2) (2026-08-31)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.4a1...0.6.4a2)
+
+**Merged pull requests:**
+
+- docs: a guide from nothing to a free OpenAI-compatible endpoint [\#27](https://github.com/TigreGotico/agentpipe/pull/27) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.6.4a1](https://github.com/TigreGotico/agentpipe/tree/0.6.4a1) (2026-08-14)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.3a1...0.6.4a1)
