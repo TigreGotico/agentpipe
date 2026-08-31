@@ -4,6 +4,7 @@ Async Python wrapper for coding agent CLIs (Aider, Claude Code, Gemini, Kilo Cod
 
 **Pages:**
 
+- **[A Free OpenAI-Compatible Endpoint](free-llm-endpoint.md)** : zero to a working free LLM endpoint with docker, and behind ovos-persona-server
 - **[Getting Started](getting-started.md)** : Install, prerequisites, 30-second quickstart, all features
 - **[Providers and Models](providers.md)** : Provider aliases, OpenCode Free/Zen/Go, model tier map
 - **[Core API](core-api.md)** : Agent, generation methods, sessions, events, results, new features

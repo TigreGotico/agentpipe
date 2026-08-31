@@ -2,8 +2,10 @@ version: "3.9"
 
 services:
   agentpipe:
-    build: .
+    # Published from dev on every push. Swap in a version tag to pin, or
+    # uncomment the build line to run a local checkout instead.
     image: ghcr.io/tigregotico/agentpipe:latest
+    # build: .
     ports:
       - "8000:8000"
     volumes:
@@ -23,8 +25,9 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
-      # Server security — set AGENTPIPE_API_KEY to require auth
-      - AGENTPIPE_API_KEY=${AGENTPIPE_API_KEY:-}
+      # Server security — uncomment to require a bearer token. An empty value
+      # is not the same as no value: leave the line out to stay open.
+      # - AGENTPIPE_API_KEY=${AGENTPIPE_API_KEY:?set a key or remove this line}
       - AGENTPIPE_MAX_PROMPT_LENGTH=${AGENTPIPE_MAX_PROMPT_LENGTH:-100000}
       - AGENTPIPE_AGENT_TTL=${AGENTPIPE_AGENT_TTL:-3600}
     restart: unless-stopped

@@ -7,10 +7,11 @@
 [![DeepWiki](https://deepwiki.com/badge/TigreGotico/agentpipe)](https://deepwiki.com/repo/TigreGotico/agentpipe)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/TigreGotico/agentpipe/pkgs/container/agentpipe)
 
-agentpipe gives you one async Python API over 7 coding agent CLIs: Aider,
-Claude Code, Gemini CLI, Kilo Code, OpenCode, QoderCLI, and Mistral Vibe. Use
-it to build multi-agent pipelines where one agent plans and a cheaper agent
-does the routine work.
+agentpipe gives you one async Python API over nine coding agent CLIs: Aider,
+Antigravity, Claude Code, Gemini CLI, Kilo Code, MimoCode, OpenCode, QoderCLI,
+and Mistral Vibe. Use it to build multi-agent pipelines where one agent plans
+and a cheaper agent does the routine work. It also runs as an HTTP server, so
+the free tiers of those CLIs become an OpenAI-compatible endpoint.
 
 ```python
 from agentpipe import Agent, delegate, fan_out
@@ -131,6 +132,8 @@ result = await cascade("Quick question", profile="free-only")
 | OpenCode Go | `opencode-go` | `opencode-go/deepseek-v4-flash` | $5-10/mo |
 | QoderCLI | `qoder` | *(CLI default)* | Per-use |
 | Mistral Vibe | `vibe` | `mistral-large-latest` | Free tier |
+| MimoCode | `mimo` | `mimo/mimo-auto` | Free tier |
+| Antigravity | `antigravity` | `Gemini 3.5 Flash (Medium)` | Free tier |
 
 ## Install Provider CLIs
 
@@ -139,20 +142,29 @@ result = await cascade("Quick question", profile="free-only")
 pip install aider-chat
 
 # Claude Code (paid subscription)
-npm install -g @anthropics/claude-code
+npm install -g @anthropic-ai/claude-code
 
 # Gemini CLI (free - Google account)
-npm install -g @google-gemini/gemini-cli
+npm install -g @google/gemini-cli
 
 # Kilo Code (free - no CC needed)
 npm install -g @kilocode/cli
 
 # OpenCode (free tier available)
-npm install -g opencode
+npm install -g opencode-ai
+
+# QoderCLI (per-use)
+npm install -g @qoder-ai/qodercli
 
 # Mistral Vibe (free tier)
 pip install mistral-vibe
 ```
+
+The Antigravity (`agy`) and MimoCode (`mimo`) CLIs come from their vendors and
+are not on npm or PyPI. Install them if you want those providers.
+
+Or skip all of it and use the [docker image](docs/free-llm-endpoint.md), which
+carries six of these CLIs already.
 
 ## HTTP Server (FastAPI)
 
@@ -199,38 +211,51 @@ curl http://localhost:8000/agents/writer/session
 
 ### Docker
 
-The container bundles 6 provider CLIs (kilo, opencode, gemini, aider,
-vibe, qodercli), so free-tier models work without extra setup. Claude
-Code needs a manual install (see the docs). The image is published to
-`ghcr.io/tigregotico/agentpipe:latest`.
+The image is published at `ghcr.io/tigregotico/agentpipe:latest`. It bundles
+six provider CLIs (kilo, opencode, gemini, aider, vibe, qodercli), so free-tier
+models work with no keys, no accounts, and nothing to install. Claude Code is
+not included: its installer is gated and it needs a paid subscription.
+
+The fastest way to a free OpenAI-compatible endpoint:
 
 ```bash
-# Create a .env file with API keys
-echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+docker run -d --name agentpipe -p 8000:8000 \
+  -e AGENTPIPE_STATELESS=1 \
+  ghcr.io/tigregotico/agentpipe:latest
 
-# Start
-docker compose up
+curl -s http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"opencode/big-pickle",
+       "messages":[{"role":"user","content":"Reply with exactly: hello from agentpipe"}]}'
 ```
 
-Volume mounts and env vars in `docker-compose.yml` control API keys, auth
-persistence, and the working directory. See
-[volume mounts and env vars](docs/server.md#docker) for details. To set
-up interactive CLI auth:
+Two compose files ship with the repository. `docker-compose.yml` is for a
+workstation: it mounts your project at `/workspace` and your CLI logins, so
+agents can work on your files. `docker-compose.stateless.yml` is for a server
+that answers strangers: no host mounts, no history on disk, and every request
+gets its own agent.
 
 ```bash
-docker compose run --rm agentpipe kilo auth login
+docker compose -f docker-compose.stateless.yml up -d
 ```
 
-See the [Docker docs](docs/server.md#docker) and the
-[server module](agentpipe/server.py) for details.
+To build from a checkout instead of pulling, uncomment the `build: .` line in
+either file.
+
+Read [A Free OpenAI-Compatible Endpoint](docs/free-llm-endpoint.md) for the
+whole thing end to end, including running it behind ovos-persona-server, and
+for what to do when it does not work.
+
 
 ## Docs
 
+- [A Free OpenAI-Compatible Endpoint](docs/free-llm-endpoint.md) - Zero to a working free LLM endpoint
 - [Getting Started](docs/getting-started.md) - Install, quickstart, all features
 - [Providers and Models](docs/providers.md) - Aliases, defaults, OpenCode plans
 - [Core API](docs/core-api.md) - Agent, sessions, events
 - [Pipeline Functions](docs/pipelines.md) - fan_out, delegate, retry_until
 - [Model Cascade](docs/cascade.md) - Fallback, cost caps, profiles
+- [HTTP Server](docs/server.md) - Endpoints, config, docker details
 - [Feature Matrix](docs/feature-matrix.md) - Per-provider comparison
 - [API Reference](docs/api-reference.md) - All exports
 
