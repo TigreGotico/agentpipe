@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Install Node.js for npm-based CLIs (kilo, gemini, qoder)
 RUN apt-get update -qq && apt-get install -y -qq curl gnupg ca-certificates \
