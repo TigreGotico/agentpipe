@@ -8,18 +8,10 @@ from .._types import (
     ThinkingEvent,
     ToolCallEvent,
     ToolResultEvent,
-    UsageEvent,
 )
+from ._utils import EFFORT_VARIANT_MAP, default_build_env, usage_from_step_finish
 
 KILO_DEFAULT_MODEL = "kilo/kilo-auto/free"
-
-_OPENCODE_EFFORT_MAP = {
-    "low": "minimal",
-    "medium": "low",
-    "high": "high",
-    "xhigh": "max",
-    "max": "max",
-}
 
 
 def _parse_kilo_line(line: str) -> dict | None:
@@ -111,7 +103,7 @@ class KiloProvider:
         if effective_model:
             cmd.extend(["--model", effective_model])
         if self._effort:
-            variant = _OPENCODE_EFFORT_MAP.get(self._effort, self._effort)
+            variant = EFFORT_VARIANT_MAP.get(self._effort, self._effort)
             cmd.extend(["--variant", variant])
         if self._include_dirs:
             for d in self._include_dirs:
@@ -170,34 +162,17 @@ class KiloProvider:
             return []
 
         if msg_type == "step_finish":
-            tokens = part.get("tokens") or {}
-            cache = tokens.get("cache") or {}
-            cache_read = int(cache.get("read") or 0)
-            cache_write = int(cache.get("write") or 0)
-            cached = cache_read + cache_write
-            return [
-                UsageEvent(
-                    input_tokens=int(tokens.get("input") or 0) + cached,
-                    output_tokens=int(tokens.get("output") or 0) + int(tokens.get("reasoning") or 0),
-                    cost_usd=part.get("cost"),
-                    cache_read_tokens=cache_read,
-                    cache_write_tokens=cache_write,
-                )
-            ]
+            return [usage_from_step_finish(part.get("tokens") or {}, cost=part.get("cost"))]
 
         return []
 
     def extract_session_id(self, raw_lines: list[str]) -> str | None:
-        for line in raw_lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            data = _parse_kilo_line(stripped)
-            if data is None:
-                continue
-            sid = data.get("sessionID")
-            if isinstance(sid, str) and sid:
-                return sid
+        from ._utils import extract_session_id_from_json
+
+        return extract_session_id_from_json(raw_lines, keys=("sessionID",))
+
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """This CLI reports its failures through a non-zero exit code."""
         return None
 
     def extract_text(self, raw_lines: list[str]) -> str:
@@ -214,6 +189,4 @@ class KiloProvider:
         return "".join(text_parts).strip()
 
     def build_env(self) -> dict[str, str]:
-        import os
-
-        return dict(os.environ)
+        return default_build_env()

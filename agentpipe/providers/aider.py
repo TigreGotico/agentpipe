@@ -35,6 +35,22 @@ _AIDER_HEADER_PATTERNS: list[re.Pattern[str]] = [
 
 _TOKENS_RE = re.compile(r"Tokens:\s*(\d+)\s+sent,\s*(\d+)\s+received")
 
+# aider hands the model string to litellm, prints whatever litellm raises, and
+# still exits 0. The text is an error, not an answer, and these are the lines
+# that say so. Ordinary model output does not start with "litellm.".
+_AIDER_ERROR_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(p)
+    for p in [
+        r"^litellm\.\w*(Error|Exception)",
+        r"^LLM Provider NOT provided",
+    ]
+]
+
+
+# Printed by aider immediately after every error it intends to retry, and
+# never after the one that ends the run.
+_AIDER_RETRY_PATTERN = re.compile(r"^Retrying in ")
+
 
 def _is_aider_header(line: str) -> bool:
     return any(p.match(line) for p in _AIDER_HEADER_PATTERNS)
@@ -214,6 +230,27 @@ class AiderProvider:
         return [ThinkingEvent(text=stripped)]
 
     def extract_session_id(self, raw_lines: list[str]) -> str | None:
+        return None
+
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """Report a litellm failure aider printed before exiting 0.
+
+        aider prints litellm's exception text for errors it goes on to
+        recover from as well as for the one that ends the run, so the text
+        alone does not mean the request failed. Its retry loop is what tells
+        them apart: a retryable error is followed by "Retrying in N seconds"
+        and then another attempt, while the error that stops the run is
+        printed on the way out with nothing after it. Rate limits are the
+        common case and they usually succeed on the second try, so treating
+        every mention as fatal would fail more requests than it saves.
+        """
+        for index in reversed(range(len(raw_lines))):
+            if not any(p.match(raw_lines[index].strip()) for p in _AIDER_ERROR_PATTERNS):
+                continue
+            rest = [raw.strip() for raw in raw_lines[index + 1:] if raw.strip()]
+            if any(_AIDER_RETRY_PATTERN.match(line) for line in rest):
+                return None
+            return " ".join([raw_lines[index].strip(), *rest])
         return None
 
     def extract_text(self, raw_lines: list[str]) -> str:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._executor import AsyncSubprocessExecutor
+from ._executor import AsyncSubprocessExecutor, ProviderOutputError
 from ._types import CommandSpec, GenerationResult, SessionInfo, SessionUsage, UsageEvent
 
 if TYPE_CHECKING:
@@ -85,6 +85,10 @@ class AgentSession:
                             self._usage.add(event)
                         yield event
 
+        error = self._provider.detect_error(raw_lines)
+        if error:
+            raise ProviderOutputError(error, cmd)
+
         if self._info.session_id is None and session_id_collected:
             self._info.session_id = session_id_collected
         if self._info.session_id is None:
@@ -117,6 +121,12 @@ class AgentSession:
         stdout, _stderr = await self._executor.run(spec)
 
         raw_lines = stdout.splitlines(keepends=True)
+        # A CLI that failed but exited 0 has written an error where its answer
+        # belongs. Returning it as text makes a failure look like a reply.
+        error = self._provider.detect_error(raw_lines)
+        if error:
+            raise ProviderOutputError(error, cmd)
+
         session_id: str | None = self._provider.extract_session_id(raw_lines)
         if self._info.session_id is None and session_id:
             self._info.session_id = session_id

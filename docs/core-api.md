@@ -6,34 +6,34 @@
 from agentpipe import Agent, ApprovalMode, EffortLevel, HttpMcpServer
 
 agent = Agent(
-    provider="claude-sonnet",      # str — provider name or alias
-    model=None,                    # str | None — override (filled from DEFAULT_MODELS if None)
-    cwd="/tmp",                    # str — working directory for subprocesses
-    timeout=300,                   # int — seconds before killing the subprocess
-    mcp_servers=[],               # list[McpServerConfig] — MCP servers (Claude, OpenCode)
-    approval_mode=None,            # ApprovalMode | None — approval mode (all providers)
-    max_budget_usd=None,           # float | None — budget cap (Claude only)
+    provider="claude-sonnet",      # str : provider name or alias
+    model=None,                    # str | None : override (filled from DEFAULT_MODELS if None)
+    cwd="/tmp",                    # str : working directory for subprocesses
+    timeout=300,                   # int : seconds before killing the subprocess
+    mcp_servers=[],               # list[McpServerConfig] : MCP servers (Claude, OpenCode)
+    approval_mode=None,            # ApprovalMode | None : approval mode (all providers)
+    max_budget_usd=None,           # float | None : budget cap (Claude only)
     # Tool allow/deny + system prompt
-    system_prompt=None,            # str | None — system prompt (Claude)
-    append_system_prompt=None,     # str | None — append to system prompt (Claude)
-    allowed_tools=None,            # list[str] | None — allowed tools (Claude, Gemini)
-    disallowed_tools=None,         # list[str] | None — disallowed tools (Claude)
+    system_prompt=None,            # str | None : system prompt (Claude)
+    append_system_prompt=None,     # str | None : append to system prompt (Claude)
+    allowed_tools=None,            # list[str] | None : allowed tools (Claude, Gemini)
+    disallowed_tools=None,         # list[str] | None : disallowed tools (Claude)
     # Effort + structured output + fallback
-    effort=None,                   # EffortLevel | None — effort level (Claude, OpenCode variant)
-    fallback_model=None,           # str | None — fallback model (Claude)
-    json_schema=None,              # dict | None — JSON schema for structured output (Claude)
+    effort=None,                   # EffortLevel | None : effort level (Claude, OpenCode variant)
+    fallback_model=None,           # str | None : fallback model (Claude)
+    json_schema=None,              # dict | None : JSON schema for structured output (Claude)
     # Session lifecycle
-    session_name=None,             # str | None — session name (Claude --name, OpenCode --title)
-    continue_last=False,           # bool — continue last session (Claude, OpenCode)
-    fork_session=False,            # bool — fork session (Claude --fork-session, OpenCode --fork)
+    session_name=None,             # str | None : session name (Claude --name, OpenCode --title)
+    continue_last=False,           # bool : continue last session (Claude, OpenCode)
+    fork_session=False,            # bool : fork session (Claude --fork-session, OpenCode --fork)
     # Files
-    files=None,                    # list[str] | None — file attachments (Claude, OpenCode)
+    files=None,                    # list[str] | None : file attachments (Claude, OpenCode)
     # Agent selection
-    agent_name=None,               # str | None — agent name (Claude, OpenCode)
+    agent_name=None,               # str | None : agent name (Claude, OpenCode)
     # Sandbox and output control
-    sandbox=False,                 # bool — sandbox mode (all providers)
-    raw_output=False,              # bool — raw output without verbose (Claude, Gemini)
-    include_dirs=None,             # list[str] | None — additional directories (all providers)
+    sandbox=False,                 # bool : sandbox mode (all providers)
+    raw_output=False,              # bool : raw output without verbose (Claude, Gemini)
+    include_dirs=None,             # list[str] | None : additional directories (all providers)
 )
 ```
 
@@ -46,7 +46,7 @@ Invalid provider names raise `ValueError` with the list of available providers.
 
 ## Generation Methods
 
-All generation methods are `async`. agentpipe spawns one subprocess per call — no persistent daemons.
+All generation methods are `async`. agentpipe spawns one subprocess per call : no persistent daemons.
 
 ### generate()
 
@@ -64,11 +64,11 @@ Returns a structured result with events, usage, and session ID:
 from agentpipe import GenerationResult
 
 result: GenerationResult = await agent.generate_full("Refactor this module")
-print(result.text)         # str — extracted text
-print(result.events)       # tuple[AgentEvent, ...] — all parsed events
-print(result.session_id)   # str | None — for resuming
+print(result.text)         # str : extracted text
+print(result.events)       # tuple[AgentEvent, ...] : all parsed events
+print(result.session_id)   # str | None : for resuming
 print(result.usage)        # UsageEvent | None
-print(result.returncode)   # int — process exit code
+print(result.returncode)   # int : process exit code
 ```
 
 ### generate_stream()
@@ -92,7 +92,7 @@ result = await agent.generate("prompt", cwd="/home/user/project", timeout=120)
 
 ## Multi-Turn Sessions
 
-`AgentSession` is an async context manager that auto-resumes. The first `generate()` call has no resume flag; subsequent calls include `--resume <session_id>`.
+`AgentSession` is an async context manager that auto-resumes. The first `generate()` call has no resume flag. Subsequent calls include `--resume <session_id>`.
 
 ```python
 async with agent.session(cwd=".") as sess:
@@ -178,11 +178,11 @@ GenerationResult(
 ```python
 from agentpipe import AgentSession
 
-# Not typically constructed directly — use agent.session()
+# Not typically constructed directly : use agent.session()
 session = agent.session(cwd=".", timeout=120)
 async with session as sess:
-    # sess.session_id — str | None (set after first generate)
-    # sess.usage — SessionUsage (accumulates across turns)
+    # sess.session_id : str | None (set after first generate)
+    # sess.usage : SessionUsage (accumulates across turns)
     text = await sess.generate("prompt")
 ```
 
@@ -261,3 +261,6 @@ Run the agent in a sandbox (Claude, Gemini, OpenCode):
 ```python
 agent = Agent("claude", sandbox=True)
 ```
+
+---
+[← Providers and Models](providers.md) · [Home](index.md) · [Pipeline Functions →](pipelines.md)

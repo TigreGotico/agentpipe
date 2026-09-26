@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 
 from ._agent import _PROVIDER_MAP, DEFAULT_MODELS
 from ._executor import AgentProcessError, AsyncSubprocessExecutor
 from ._types import CommandSpec
+
+logger = logging.getLogger(__name__)
 
 _CLAUDE_PLAN_LIMITS: dict[str, dict] = {
     "max": {"requests_per_day": None, "context_window": 200000, "tier": "max"},
@@ -86,7 +89,8 @@ async def _claude_quota_status(provider: object, executor: AsyncSubprocessExecut
             provider="claude",
             raw_auth=data,
         )
-    except (AgentProcessError, json.JSONDecodeError, Exception) as e:
+    except (AgentProcessError, json.JSONDecodeError) as e:
+        logger.warning("Claude quota status check failed: %s", e)
         return QuotaStatus(
             authenticated=False,
             provider="claude",
@@ -154,8 +158,8 @@ async def _opencode_quota_status(provider: object, executor: AsyncSubprocessExec
         )
         stdout, _stderr = await executor.run(auth_spec)
         authenticated = len(stdout.strip()) > 0
-    except AgentProcessError:
-        pass
+    except AgentProcessError as e:
+        logger.warning("OpenCode auth check failed: %s", e)
 
     models: list[str] = []
     try:
@@ -167,8 +171,8 @@ async def _opencode_quota_status(provider: object, executor: AsyncSubprocessExec
         )
         stdout, _stderr = await executor.run(models_spec)
         models = [line.strip() for line in stdout.strip().splitlines() if line.strip()]
-    except AgentProcessError:
-        pass
+    except AgentProcessError as e:
+        logger.warning("OpenCode model listing failed: %s", e)
 
     usage_stats: dict = {}
     try:
@@ -180,8 +184,8 @@ async def _opencode_quota_status(provider: object, executor: AsyncSubprocessExec
         )
         stdout, _stderr = await executor.run(stats_spec)
         usage_stats = {"raw": stdout}
-    except AgentProcessError:
-        pass
+    except AgentProcessError as e:
+        logger.warning("OpenCode stats query failed: %s", e)
 
     return QuotaStatus(
         authenticated=authenticated,

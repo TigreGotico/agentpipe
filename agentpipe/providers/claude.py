@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from .._types import (
     AgentEvent,
     ApprovalMode,
-    HttpMcpServer,
     McpServerConfig,
-    StdioMcpServer,
     ThinkingEvent,
     ToolCallEvent,
     ToolResultEvent,
-    UsageEvent,
 )
+from ._utils import ToolTracker, build_mcp_config_json, usage_from_anthropic
 
 
 @dataclass
@@ -170,8 +167,7 @@ class ClaudeProvider:
         self._continue_last = continue_last
         self._fork_session = fork_session
         self._files = files
-        self._tool_map: dict[str, str] = {}
-        self._tool_start_times: dict[str, float] = {}
+        self._tools = ToolTracker()
 
     @property
     def binary_name(self) -> str:
@@ -180,21 +176,6 @@ class ClaudeProvider:
     @property
     def model(self) -> str | None:
         return self._model
-
-    def _build_mcp_config_json(self) -> str:
-        servers: dict[str, dict[str, Any]] = {}
-        for server in self._mcp_servers:
-            if isinstance(server, HttpMcpServer):
-                entry: dict[str, Any] = {"type": "sse", "url": server.url}
-                if server.headers:
-                    entry["headers"] = dict(server.headers)
-                servers[server.name] = entry
-            else:
-                stdio_entry: dict[str, Any] = {"command": server.command, "args": server.args}
-                if isinstance(server, StdioMcpServer) and server.env:
-                    stdio_entry["env"] = server.env
-                servers[server.name] = stdio_entry
-        return json.dumps({"mcpServers": servers})
 
     def build_command(
         self,
@@ -273,7 +254,7 @@ class ClaudeProvider:
             cmd.extend(["--model", effective_model])
 
         if self._mcp_servers:
-            cmd.extend(["--mcp-config", self._build_mcp_config_json(), "--strict-mcp-config"])
+            cmd.extend(["--mcp-config", build_mcp_config_json(self._mcp_servers), "--strict-mcp-config"])
 
         if self._max_budget_usd is not None:
             cmd.extend(["--max-budget-usd", str(self._max_budget_usd)])
@@ -292,19 +273,18 @@ class ClaudeProvider:
         if isinstance(parsed, _MultiEvent):
             events: list[AgentEvent] = []
             for sub in parsed.events:
-                events.extend(self._convert_internal_event(sub, time.monotonic()))
+                events.extend(self._convert_internal_event(sub))
             return events
 
-        return self._convert_internal_event(parsed, time.monotonic())
+        return self._convert_internal_event(parsed)
 
-    def _convert_internal_event(self, parsed: _ClaudeParsedEvent, now: float) -> list[AgentEvent]:
+    def _convert_internal_event(self, parsed: _ClaudeParsedEvent) -> list[AgentEvent]:
         if isinstance(parsed, _TextEvent):
             return [ThinkingEvent(text=parsed.text)]
 
         if isinstance(parsed, _ToolUseEvent):
             if parsed.tool_id:
-                self._tool_map[parsed.tool_id] = parsed.tool_name
-                self._tool_start_times[parsed.tool_id] = now
+                self._tools.record(parsed.tool_id, parsed.tool_name)
             return [
                 ToolCallEvent(
                     tool=parsed.tool_name,
@@ -314,29 +294,17 @@ class ClaudeProvider:
             ]
 
         if isinstance(parsed, _ToolResultInternalEvent):
-            tool_name = self._tool_map.get(parsed.tool_id or "", "Tool")
-            start = self._tool_start_times.get(parsed.tool_id or "")
-            duration_ms = ((now - start) * 1000) if start else None
+            base = self._tools.resolve(parsed.tool_id)
             return [
                 ToolResultEvent(
-                    tool=tool_name,
+                    tool=base.tool,
                     output=parsed.output,
-                    duration_ms=duration_ms,
+                    duration_ms=base.duration_ms,
                 )
             ]
 
         if isinstance(parsed, _ResultInternalEvent):
-            usage = parsed.usage or {}
-            cached = int(usage.get("cache_creation_input_tokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
-            return [
-                UsageEvent(
-                    input_tokens=int(usage.get("input_tokens") or 0) + cached,
-                    output_tokens=int(usage.get("output_tokens") or 0),
-                    cost_usd=parsed.total_cost_usd,
-                    cache_read_tokens=int(usage.get("cache_read_input_tokens") or 0),
-                    cache_write_tokens=int(usage.get("cache_creation_input_tokens") or 0),
-                )
-            ]
+            return [usage_from_anthropic(parsed.usage or {}, cost_usd=parsed.total_cost_usd)]
 
         if isinstance(parsed, _SystemEvent):
             return []
@@ -351,6 +319,10 @@ class ClaudeProvider:
             parsed = _parse_claude_line(stripped)
             if isinstance(parsed, _SystemEvent) and parsed.session_id:
                 return parsed.session_id
+        return None
+
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """This CLI reports its failures through a non-zero exit code."""
         return None
 
     def extract_text(self, raw_lines: list[str]) -> str:

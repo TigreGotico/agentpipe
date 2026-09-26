@@ -12,6 +12,7 @@ from .._types import (
     ToolResultEvent,
     UsageEvent,
 )
+from ._utils import ToolTracker, default_build_env, extract_session_id_from_json
 
 VIBE_DEFAULT_MODEL = "mistral-large-latest"
 
@@ -124,8 +125,7 @@ class VibeProvider:
         self._max_turns = max_turns
         self._max_price = max_price
         self._max_tokens = max_tokens
-        self._tool_map: dict[str, str] = {}
-        self._tool_start_times: dict[str, float] = {}
+        self._tools = ToolTracker()
 
     @property
     def binary_name(self) -> str:
@@ -173,8 +173,6 @@ class VibeProvider:
         return cmd
 
     def parse_event_line(self, line: str) -> list[AgentEvent]:
-        import time
-
         stripped = line.strip()
         if not stripped:
             return []
@@ -188,8 +186,7 @@ class VibeProvider:
 
         if isinstance(parsed, _VibeToolUseEvent):
             if parsed.tool_id:
-                self._tool_map[parsed.tool_id] = parsed.tool_name
-                self._tool_start_times[parsed.tool_id] = time.monotonic()
+                self._tools.record(parsed.tool_id, parsed.tool_name)
             return [
                 ToolCallEvent(
                     tool=parsed.tool_name,
@@ -199,14 +196,12 @@ class VibeProvider:
             ]
 
         if isinstance(parsed, _VibeToolResultEvent):
-            tool_name = self._tool_map.get(parsed.tool_id or "", "Tool")
-            start = self._tool_start_times.get(parsed.tool_id or "")
-            duration_ms = ((time.monotonic() - start) * 1000) if start else None
+            base = self._tools.resolve(parsed.tool_id)
             return [
                 ToolResultEvent(
-                    tool=tool_name,
+                    tool=base.tool,
                     output=parsed.output,
-                    duration_ms=duration_ms,
+                    duration_ms=base.duration_ms,
                 )
             ]
 
@@ -222,17 +217,10 @@ class VibeProvider:
         return []
 
     def extract_session_id(self, raw_lines: list[str]) -> str | None:
-        for line in raw_lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                data = json.loads(stripped)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            sid = data.get("session_id") or data.get("sessionID")
-            if isinstance(sid, str) and sid:
-                return sid
+        return extract_session_id_from_json(raw_lines)
+
+    def detect_error(self, raw_lines: list[str]) -> str | None:
+        """This CLI reports its failures through a non-zero exit code."""
         return None
 
     def extract_text(self, raw_lines: list[str]) -> str:
@@ -247,6 +235,4 @@ class VibeProvider:
         return "".join(text_parts).strip()
 
     def build_env(self) -> dict[str, str]:
-        import os
-
-        return dict(os.environ)
+        return default_build_env()

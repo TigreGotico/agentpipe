@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from ._agent import Agent
+
+logger = logging.getLogger(__name__)
 
 
 async def fan_out(
@@ -60,15 +63,20 @@ async def retry_until(
     cwd: str | None = None,
     timeout: int = 300,
 ) -> str:
+    result = ""
     for attempt in range(max_attempts):
         session = agent.session(cwd=cwd, timeout=timeout)
-        current_prompt = prompt if attempt == 0 else (
-            refine_prompt or "The previous result was not satisfactory. Please try again, fixing any issues."
+        current_prompt = (
+            prompt
+            if attempt == 0
+            else (refine_prompt or "The previous result was not satisfactory. Please try again, fixing any issues.")
         )
         result = await session.generate(current_prompt)
         if validator(result):
             return result
+        logger.warning("retry_until: attempt %d/%d failed validation", attempt + 1, max_attempts)
 
+    logger.warning("retry_until: all %d attempts exhausted, returning last result", max_attempts)
     return result
 
 

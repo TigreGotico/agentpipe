@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -20,9 +21,26 @@ from ._types import (
     SessionExport,
 )
 from .providers.aider import AiderProvider
+from .providers.antigravity import (
+    AntigravityClaudeOpusProvider,
+    AntigravityClaudeSonnetProvider,
+    AntigravityFlashHighProvider,
+    AntigravityFlashLowProvider,
+    AntigravityFlashMediumProvider,
+    AntigravityGptOssProvider,
+    AntigravityProHighProvider,
+    AntigravityProLowProvider,
+    AntigravityProvider,
+)
 from .providers.claude import ClaudeHaikuProvider, ClaudeOpusProvider, ClaudeProvider, ClaudeSonnetProvider
 from .providers.gemini import GeminiFlashProvider, GeminiProProvider, GeminiProvider
 from .providers.kilo import KiloProvider
+from .providers.mimocode import (
+    MimocodeAutoProvider,
+    MimocodeProvider,
+    MimocodeV2FlashProvider,
+    MimocodeV2ProProvider,
+)
 from .providers.opencode import (
     OpencodeFreeProvider,
     OpencodeGoProvider,
@@ -35,6 +53,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from ._types import AgentEvent, GenerationResult, Provider
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CWD = os.environ.get("AGENTPIPE_CWD", "/tmp")
 
@@ -52,14 +72,31 @@ DEFAULT_MODELS: dict[str, str] = {
     "opencode-free": "opencode/big-pickle",
     "opencode-zen": "opencode/gemini-3-flash",
     "opencode-go": "opencode-go/deepseek-v4-flash",
+    "mimo": "mimo/mimo-auto",
+    "mimo-auto": "mimo/mimo-auto",
+    "mimo-v2-pro": "xiaomi/mimo-v2.5-pro",
+    "mimo-v2-flash": "xiaomi/mimo-v2-flash",
     "qoder": "mistral-large-latest",
     "vibe": "mistral-large-latest",
+    "antigravity": "Gemini 3.5 Flash (Medium)",
+    "antigravity-flash-medium": "Gemini 3.5 Flash (Medium)",
+    "antigravity-flash-high": "Gemini 3.5 Flash (High)",
+    "antigravity-flash-low": "Gemini 3.5 Flash (Low)",
+    "antigravity-pro-low": "Gemini 3.1 Pro (Low)",
+    "antigravity-pro-high": "Gemini 3.1 Pro (High)",
+    "antigravity-claude-sonnet": "Claude Sonnet 4.6 (Thinking)",
+    "antigravity-claude-opus": "Claude Opus 4.6 (Thinking)",
+    "antigravity-gpt-oss": "GPT-OSS 120B (Medium)",
 }
 
 _PROVIDER_MAP: dict[str, type] = {
     "aider": AiderProvider,
     "claude": ClaudeProvider,
     "kilo": KiloProvider,
+    "mimo": MimocodeProvider,
+    "mimo-auto": MimocodeAutoProvider,
+    "mimo-v2-pro": MimocodeV2ProProvider,
+    "mimo-v2-flash": MimocodeV2FlashProvider,
     "claude-sonnet": ClaudeSonnetProvider,
     "claude-haiku": ClaudeHaikuProvider,
     "claude-opus": ClaudeOpusProvider,
@@ -72,6 +109,15 @@ _PROVIDER_MAP: dict[str, type] = {
     "opencode-go": OpencodeGoProvider,
     "qoder": QoderProvider,
     "vibe": VibeProvider,
+    "antigravity": AntigravityProvider,
+    "antigravity-flash-medium": AntigravityFlashMediumProvider,
+    "antigravity-flash-high": AntigravityFlashHighProvider,
+    "antigravity-flash-low": AntigravityFlashLowProvider,
+    "antigravity-pro-low": AntigravityProLowProvider,
+    "antigravity-pro-high": AntigravityProHighProvider,
+    "antigravity-claude-sonnet": AntigravityClaudeSonnetProvider,
+    "antigravity-claude-opus": AntigravityClaudeOpusProvider,
+    "antigravity-gpt-oss": AntigravityGptOssProvider,
 }
 
 
@@ -167,6 +213,17 @@ class Agent:
             kwargs["files"] = self.files
         self._provider_instance = cls(**kwargs)
 
+    # Fields the provider copies at construction. Setting one on a built Agent
+    # has to be pushed through, or the assignment is silently discarded.
+    _PROVIDER_SYNCED = ("continue_last", "fork_session")
+
+    def __setattr__(self, name: str, value) -> None:
+        super().__setattr__(name, value)
+        if name in Agent._PROVIDER_SYNCED:
+            provider = self.__dict__.get("_provider_instance")
+            if provider is not None:
+                setattr(provider, f"_{name}", value)
+
     async def generate(
         self,
         prompt: str,
@@ -217,12 +274,16 @@ class Agent:
         return await self.executor.check_binary(self._provider_instance.binary_name)
 
     async def auth_status(self) -> AuthStatus:
+        if self.provider.startswith("antigravity"):
+            return await self._antigravity_auth_status()
         if self.provider == "claude":
             return await self._claude_auth_status()
         if self.provider == "gemini":
             return await self._gemini_auth_status()
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_auth_status()
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_auth_status()
         return AuthStatus(authenticated=False, provider=self.provider)
 
     async def auth_login(self, *, method: str | None = None) -> AuthStatus:
@@ -230,6 +291,8 @@ class Agent:
             return await self._opencode_auth_login()
         if self.provider == "claude":
             return await self._claude_auth_login(method=method)
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_auth_login()
         raise NotImplementedError(f"auth_login not supported for {self.provider}")
 
     async def auth_logout(self) -> AuthStatus:
@@ -237,18 +300,24 @@ class Agent:
             return await self._opencode_auth_logout()
         if self.provider == "claude":
             return await self._claude_auth_logout()
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_auth_logout()
         raise NotImplementedError(f"auth_logout not supported for {self.provider}")
 
     async def delete_session(self, session_id: str, *, cwd: str | None = None) -> bool:
         effective_cwd = cwd or self.cwd
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_delete_session(session_id, effective_cwd)
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_delete_session(session_id, effective_cwd)
         raise NotImplementedError(f"delete_session not supported for {self.provider}")
 
     async def export_session(self, session_id: str, *, cwd: str | None = None) -> SessionExport:
         effective_cwd = cwd or self.cwd
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_export_session(session_id, effective_cwd)
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_export_session(session_id, effective_cwd)
         raise NotImplementedError(f"export_session not supported for {self.provider}")
 
     async def import_session(self, data: str, *, cwd: str | None = None) -> str | None:
@@ -274,6 +343,8 @@ class Agent:
             )
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_mcp_add(name, url=url, command=command, args=args, env=env)
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_mcp_add(name, url=url, command=command, args=args, env=env)
         raise NotImplementedError(f"mcp_add not supported for {self.provider}")
 
     async def mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
@@ -281,6 +352,8 @@ class Agent:
             return await self._claude_mcp_remove(name, scope=scope)
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_mcp_remove(name)
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_mcp_remove(name)
         raise NotImplementedError(f"mcp_remove not supported for {self.provider}")
 
     async def mcp_list(self) -> list[McpServerInfo]:
@@ -288,6 +361,8 @@ class Agent:
             return await self._claude_mcp_list()
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_mcp_list()
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_mcp_list()
         raise NotImplementedError(f"mcp_list not supported for {self.provider}")
 
     async def list_extensions(self) -> list[ExtensionInfo]:
@@ -306,11 +381,17 @@ class Agent:
             return await self._gemini_list_sessions(effective_cwd)
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_list_sessions(effective_cwd)
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_list_sessions(effective_cwd)
         raise NotImplementedError(f"list_sessions not supported for {self.provider}")
 
     async def list_models(self) -> list[ModelInfo]:
+        if self.provider.startswith("antigravity"):
+            return await self._antigravity_list_models()
         if self.provider in ("opencode", "opencode-free", "opencode-zen", "opencode-go"):
             return await self._opencode_list_models()
+        if self.provider in ("mimo", "mimo-auto", "mimo-v2-pro", "mimo-v2-flash"):
+            return await self._mimo_list_models()
         raise NotImplementedError(f"list_models not supported for {self.provider}")
 
     async def stats(self, *, days: int | None = None, cwd: str | None = None) -> dict:
@@ -336,7 +417,8 @@ class Agent:
                 subscription_type=data.get("subscriptionType"),
                 raw=data,
             )
-        except (AgentProcessError, json.JSONDecodeError):
+        except (AgentProcessError, json.JSONDecodeError) as e:
+            logger.warning("Claude auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _gemini_auth_status(self) -> AuthStatus:
@@ -349,7 +431,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="gemini")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="gemini")
 
     async def _opencode_auth_status(self) -> AuthStatus:
@@ -363,8 +446,42 @@ class Agent:
             stdout, _stderr = await self.executor.run(spec)
             has_any = len(stdout.strip()) > 0
             return AuthStatus(authenticated=has_any, provider="opencode", raw=None)
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth status check failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
+
+    async def _antigravity_auth_status(self) -> AuthStatus:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=10.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=True, provider=self.provider)
+        except AgentProcessError as e:
+            logger.warning("Antigravity auth status check failed: %s", e)
+            return AuthStatus(authenticated=False, provider=self.provider)
+
+    async def _antigravity_list_models(self) -> list[ModelInfo]:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            models: list[ModelInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line and "Fetching available models..." not in line:
+                    models.append(ModelInfo(id=line, provider="antigravity"))
+            return models
+        except AgentProcessError as e:
+            logger.warning("Antigravity list models failed: %s", e)
+            return []
 
     async def _gemini_list_sessions(self, cwd: str) -> list[SessionEntry]:
         spec = CommandSpec(
@@ -382,7 +499,8 @@ class Agent:
                 if line:
                     entries.append(SessionEntry(session_id=line, provider="gemini"))
             return entries
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini list sessions failed: %s", e)
             return []
 
     async def _opencode_list_sessions(self, cwd: str) -> list[SessionEntry]:
@@ -401,7 +519,8 @@ class Agent:
                 if line:
                     entries.append(SessionEntry(session_id=line, provider="opencode"))
             return entries
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode list sessions failed: %s", e)
             return []
 
     async def _opencode_list_models(self) -> list[ModelInfo]:
@@ -419,7 +538,8 @@ class Agent:
                 if line:
                     models.append(ModelInfo(id=line, provider="opencode"))
             return models
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode list models failed: %s", e)
             return []
 
     async def _opencode_stats(self, *, days: int | None = None, cwd: str) -> dict:
@@ -436,7 +556,8 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return {"raw": stdout}
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode stats failed: %s", e)
             return {"raw": ""}
 
     async def _claude_auth_login(self, *, method: str | None = None) -> AuthStatus:
@@ -447,7 +568,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="claude", method=method)
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude auth login failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _claude_auth_logout(self) -> AuthStatus:
@@ -460,7 +582,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=False, provider="claude")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude auth logout failed: %s", e)
             return AuthStatus(authenticated=False, provider="claude")
 
     async def _opencode_auth_login(self) -> AuthStatus:
@@ -473,7 +596,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=True, provider="opencode")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth login failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_auth_logout(self) -> AuthStatus:
@@ -486,7 +610,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return AuthStatus(authenticated=False, provider="opencode")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode auth logout failed: %s", e)
             return AuthStatus(authenticated=False, provider="opencode")
 
     async def _opencode_delete_session(self, session_id: str, cwd: str) -> bool:
@@ -500,7 +625,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode delete session '%s' failed: %s", session_id, e)
             return False
 
     async def _opencode_export_session(self, session_id: str, cwd: str) -> SessionExport:
@@ -514,7 +640,8 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return SessionExport(session_id=session_id, data=stdout, format="json")
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode export session '%s' failed: %s", session_id, e)
             return SessionExport(session_id=session_id, data="", format="json")
 
     async def _opencode_import_session(self, data: str, cwd: str) -> str | None:
@@ -532,7 +659,8 @@ class Agent:
                 if line:
                     return line
             return None
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode import session failed: %s", e)
             return None
 
     async def _claude_mcp_add(
@@ -565,7 +693,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP add '%s' failed: %s", name, e)
             return False
 
     async def _claude_mcp_remove(self, name: str, *, scope: str | None = None) -> bool:
@@ -576,7 +705,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP remove '%s' failed: %s", name, e)
             return False
 
     async def _claude_mcp_list(self) -> list[McpServerInfo]:
@@ -592,9 +722,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="claude"))
+                    servers.append(McpServerInfo(name=line))
             return servers
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude MCP list failed: %s", e)
             return []
 
     async def _opencode_mcp_add(
@@ -621,7 +752,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP add '%s' failed: %s", name, e)
             return False
 
     async def _opencode_mcp_remove(self, name: str) -> bool:
@@ -634,7 +766,8 @@ class Agent:
         try:
             await self.executor.run(spec)
             return True
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP remove '%s' failed: %s", name, e)
             return False
 
     async def _opencode_mcp_list(self) -> list[McpServerInfo]:
@@ -650,9 +783,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line and not line.startswith("No"):
-                    servers.append(McpServerInfo(name=line, provider="opencode"))
+                    servers.append(McpServerInfo(name=line))
             return servers
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("OpenCode MCP list failed: %s", e)
             return []
 
     async def _gemini_list_extensions(self) -> list[ExtensionInfo]:
@@ -668,9 +802,10 @@ class Agent:
             for line in stdout.strip().splitlines():
                 line = line.strip()
                 if line:
-                    extensions.append(ExtensionInfo(name=line, provider="gemini"))
+                    extensions.append(ExtensionInfo(name=line))
             return extensions
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Gemini list extensions failed: %s", e)
             return []
 
     async def _claude_doctor(self) -> dict:
@@ -683,5 +818,183 @@ class Agent:
         try:
             stdout, _stderr = await self.executor.run(spec)
             return {"raw": stdout}
-        except AgentProcessError:
+        except AgentProcessError as e:
+            logger.warning("Claude doctor failed: %s", e)
             return {"raw": ""}
+
+    async def _mimo_auth_status(self) -> AuthStatus:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "providers", "list"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            has_any = "0 credentials" not in stdout and len(stdout.strip()) > 0
+            return AuthStatus(authenticated=has_any, provider="mimo")
+        except AgentProcessError as e:
+            logger.warning("MiMoCode auth status check failed: %s", e)
+            return AuthStatus(authenticated=False, provider="mimo")
+
+    async def _mimo_auth_login(self) -> AuthStatus:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "providers", "login"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=120.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=True, provider="mimo")
+        except AgentProcessError as e:
+            logger.warning("MiMoCode auth login failed: %s", e)
+            return AuthStatus(authenticated=False, provider="mimo")
+
+    async def _mimo_auth_logout(self) -> AuthStatus:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "providers", "logout"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return AuthStatus(authenticated=False, provider="mimo")
+        except AgentProcessError as e:
+            logger.warning("MiMoCode auth logout failed: %s", e)
+            return AuthStatus(authenticated=False, provider="mimo")
+
+    async def _mimo_list_sessions(self, cwd: str) -> list[SessionEntry]:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "session", "list"],
+            stdin="",
+            cwd=cwd,
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            entries: list[SessionEntry] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line and not line.startswith("Session ID"):
+                # Parse tabular output: first column is session ID
+                    parts = line.split()
+                    if parts and parts[0].startswith("ses_"):
+                        title = " ".join(parts[1:]) if len(parts) > 1 else None
+                        entries.append(SessionEntry(session_id=parts[0], title=title, provider="mimo"))
+            return entries
+        except AgentProcessError as e:
+            logger.warning("MiMoCode list sessions failed: %s", e)
+            return []
+
+    async def _mimo_delete_session(self, session_id: str, cwd: str) -> bool:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "session", "delete", session_id],
+            stdin="",
+            cwd=cwd,
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError as e:
+            logger.warning("MiMoCode delete session '%s' failed: %s", session_id, e)
+            return False
+
+    async def _mimo_export_session(self, session_id: str, cwd: str) -> SessionExport:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "export", session_id],
+            stdin="",
+            cwd=cwd,
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            return SessionExport(session_id=session_id, data=stdout, format="json")
+        except AgentProcessError as e:
+            logger.warning("MiMoCode export session '%s' failed: %s", session_id, e)
+            return SessionExport(session_id=session_id, data="", format="json")
+
+    async def _mimo_list_models(self) -> list[ModelInfo]:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "models"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=30.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            models: list[ModelInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                if line:
+                    models.append(ModelInfo(id=line, provider="mimo"))
+            return models
+        except AgentProcessError as e:
+            logger.warning("MiMoCode list models failed: %s", e)
+            return []
+
+    async def _mimo_mcp_add(
+        self,
+        name: str,
+        *,
+        url: str | None = None,
+        command: str | None = None,
+        args: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> bool:
+        cmd = [self._provider_instance.binary_name, "mcp", "add", name]
+        if command:
+            cmd.extend([command])
+            if args:
+                cmd.extend(args)
+        else:
+            return False
+        if env:
+            for k, v in env.items():
+                cmd.extend(["-e", f"{k}={v}"])
+        spec = CommandSpec(argv=cmd, stdin="", env=self._provider_instance.build_env(), timeout=15.0)
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError as e:
+            logger.warning("MiMoCode MCP add '%s' failed: %s", name, e)
+            return False
+
+    async def _mimo_mcp_remove(self, name: str) -> bool:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "mcp", "remove", name],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            await self.executor.run(spec)
+            return True
+        except AgentProcessError as e:
+            logger.warning("MiMoCode MCP remove '%s' failed: %s", name, e)
+            return False
+
+    async def _mimo_mcp_list(self) -> list[McpServerInfo]:
+        spec = CommandSpec(
+            argv=[self._provider_instance.binary_name, "mcp", "list"],
+            stdin="",
+            env=self._provider_instance.build_env(),
+            timeout=15.0,
+        )
+        try:
+            stdout, _stderr = await self.executor.run(spec)
+            servers: list[McpServerInfo] = []
+            for line in stdout.strip().splitlines():
+                line = line.strip()
+                _skip_prefixes = ("No", "┌", "└", "│")
+                if line and not line.startswith(_skip_prefixes):
+                    servers.append(McpServerInfo(name=line))
+            return servers
+        except AgentProcessError as e:
+            logger.warning("MiMoCode MCP list failed: %s", e)
+            return []

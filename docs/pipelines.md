@@ -87,7 +87,7 @@ result: str = await retry_until(
 How it works:
 1. Call `agent.generate(prompt)`.
 2. If `validator(result)` returns `True`, return the result.
-3. If `False`, call again — if `refine_prompt` is set, the previous output + refine prompt is prepended; otherwise the original prompt is retried.
+3. If `False`, call again. If `refine_prompt` is set, prepend the previous output and the refine prompt. Otherwise, retry the original prompt.
 4. Repeat up to `max_attempts`.
 
 **Signature:**
@@ -128,3 +128,6 @@ async def map_concurrent(
 ```
 
 Returns one string per agent, in the same order as the input list.
+
+---
+[← Core API](core-api.md) · [Home](index.md) · [Model Cascade →](cascade.md)

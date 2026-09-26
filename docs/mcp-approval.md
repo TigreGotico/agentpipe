@@ -68,10 +68,10 @@ At build time, these are serialized to a JSON blob passed via `--mcp-config` (Cl
 | Feature | Claude | Gemini | OpenCode |
 |---------|--------|--------|----------|
 | Inline HTTP MCP | `--mcp-config` | Config only | Config only |
-| Inline Stdio MCP | `--mcp-config` | — | Config only |
-| `mcp_add()` | `claude mcp add` | — | `opencode mcp add` |
-| `mcp_remove()` | `claude mcp remove` | — | `opencode mcp remove` |
-| `mcp_list()` | `claude mcp list` | — | `opencode mcp list` |
+| Inline Stdio MCP | `--mcp-config` | n/a | Config only |
+| `mcp_add()` | `claude mcp add` | n/a | `opencode mcp add` |
+| `mcp_remove()` | `claude mcp remove` | n/a | `opencode mcp remove` |
+| `mcp_list()` | `claude mcp list` | n/a | `opencode mcp list` |
 
 ## Programmatic MCP Management
 
@@ -124,7 +124,7 @@ All three providers support approval modes, mapped to their native CLI flags.
 ```python
 from agentpipe import Agent, ApprovalMode
 
-# Full auto — uses --dangerously-skip-permissions (default)
+# full auto: uses --dangerously-skip-permissions (default)
 agent = Agent("claude")
 
 # Plan mode (read-only, no tool execution)
@@ -133,10 +133,10 @@ agent = Agent("claude", approval_mode=ApprovalMode.PLAN)
 # Auto-edit (auto-approve file edits, ask for shell commands)
 agent = Agent("claude", approval_mode=ApprovalMode.AUTO_EDIT)
 
-# Yolo mode — bypass all permissions
+# yolo mode: bypass all permissions
 agent = Agent("claude", approval_mode=ApprovalMode.YOLO)
 
-# Bypass — same as YOLO
+# bypass: same as YOLO
 agent = Agent("claude", approval_mode=ApprovalMode.BYPASS)
 ```
 
@@ -153,10 +153,10 @@ agent = Agent("claude", approval_mode=ApprovalMode.BYPASS)
 ```python
 from agentpipe import Agent, ApprovalMode
 
-# Yolo / Bypass — auto-approve all
+# yolo/bypass: auto-approve all
 agent = Agent("gemini", approval_mode=ApprovalMode.YOLO)
 
-# Plan — read-only mode
+# plan: read-only mode
 agent = Agent("gemini", approval_mode=ApprovalMode.PLAN)
 
 # Auto-edit
@@ -165,7 +165,7 @@ agent = Agent("gemini", approval_mode=ApprovalMode.AUTO_EDIT)
 
 | ApprovalMode | Gemini CLI Flag | Behavior |
 |---|---|---|
-| `DEFAULT` | — | Normal approval |
+| `DEFAULT` | n/a | Normal approval |
 | `AUTO_EDIT` | `--approval-mode auto_edit` | Auto-approve edits |
 | `YOLO` | `--yolo` | Auto-approve all tools |
 | `PLAN` | `--approval-mode plan` | Read-only |
@@ -176,7 +176,7 @@ agent = Agent("gemini", approval_mode=ApprovalMode.AUTO_EDIT)
 ```python
 from agentpipe import Agent, ApprovalMode
 
-# Auto mode — confirm each action (non-YOLO)
+# auto mode: confirm each action (non-YOLO)
 agent = Agent("kilo", approval_mode=ApprovalMode.PLAN)
 
 # Bypass permissions (default for non-interactive runs)
@@ -196,13 +196,13 @@ from agentpipe import Agent, ApprovalMode
 # Bypass permissions (default for non-interactive runs)
 agent = Agent("opencode", approval_mode=ApprovalMode.YOLO)
 
-# Explicit plan mode — no --dangerously-skip-permissions
+# explicit plan mode: no --dangerously-skip-permissions
 agent = Agent("opencode", approval_mode=ApprovalMode.PLAN)
 ```
 
 | ApprovalMode | OpenCode CLI Flag | Behavior |
 |---|---|---|
-| `DEFAULT` | — | `--dangerously-skip-permissions` |
+| `DEFAULT` | n/a | `--dangerously-skip-permissions` |
 | `YOLO` | `--dangerously-skip-permissions` | Bypass all permissions |
 | `BYPASS` | `--dangerously-skip-permissions` | Same as YOLO |
 
@@ -215,7 +215,7 @@ from agentpipe import Agent, ApprovalMode
 agent = Agent("aider", approval_mode=ApprovalMode.YOLO)
 ```
 
-Aider does not have fine-grained approval modes — `--yes-always` is always set in headless operation.
+Aider does not have fine-grained approval modes. It always sets `--yes-always` in headless operation.
 
 When `approval_mode` is `None` (the default), all providers use their most permissive mode for non-interactive execution.
 
@@ -231,3 +231,6 @@ if result.usage:
 ```
 
 The budget cap is passed as `--max-budget-usd` to the Claude CLI. The agent will stop generating once the budget is reached.
+
+---
+[← HTTP Server](server.md) · [Home](index.md) · [Auth and Quota →](auth-quota.md)

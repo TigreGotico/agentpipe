@@ -61,9 +61,9 @@ except AgentProcessError as e:
 ```
 
 `AgentProcessError` extends `RuntimeError` with:
-- `returncode: int` — the process exit code
-- `stderr: str` — stderr output
-- `argv: list[str]` — the command that was run
+- `returncode: int`: the process exit code
+- `stderr: str`: stderr output
+- `argv: list[str]`: the command that was run
 
 ### Cascade Error Handling
 
@@ -136,9 +136,9 @@ logger = logging.getLogger(__name__)
 
 def log_attempt(attempt: CascadeAttempt):
     if attempt.success:
-        logger.info(f"✓ {attempt.model} ({attempt.provider}): {attempt.duration_seconds:.1f}s")
+        logger.info(f"ok {attempt.model} ({attempt.provider}): {attempt.duration_seconds:.1f}s")
     else:
-        logger.warning(f"✗ {attempt.model} ({attempt.provider}): {attempt.error_type} - {attempt.error_message}")
+        logger.warning(f"fail {attempt.model} ({attempt.provider}): {attempt.error_type} - {attempt.error_message}")
 
 result = await cascade("important prompt", on_attempt=log_attempt, profile="default")
 logger.info(f"Success: {result.successful_model} via {result.successful_provider}")
@@ -165,3 +165,6 @@ result = await cascade(
     on_attempt=lambda a: print(f"  {a.model}: ${a.cost_usd or 0:.4f}"),
 )
 ```
+
+---
+[← Provider Internals](provider-internals.md) · [Home](index.md) · [Feature Matrix →](feature-matrix.md)

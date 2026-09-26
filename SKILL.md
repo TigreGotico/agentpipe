@@ -234,7 +234,7 @@ curl -X POST http://localhost:8000/agents/tester/generate \
   -d '{"prompt":"Write tests for src/utils.py"}'
 ```
 
-Sessions persist across requests automatically. Use the `user` field in
-OpenAI requests to control session identity.
+Named agents keep their sessions across requests. OpenAI requests are
+independent unless they carry a `user` field, which opts into a session.
 
 Docker: `docker compose up`

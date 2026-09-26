@@ -37,11 +37,11 @@ for provider in ["claude", "gemini", "opencode", "opencode-go"]:
 
 ### Provider-Specific Behavior
 
-**Claude** — runs `claude auth status --json`, parses `loggedIn`, `email`, `authMethod`, `subscriptionType`.
+Claude runs `claude auth status --json` and parses `loggedIn`, `email`, `authMethod`, and `subscriptionType`.
 
-**Gemini** — checks `gemini --version` for auth, then probes with a test prompt to detect rate limits and extract reset time from the error message.
+Gemini checks `gemini --version` for auth, then probes with a test prompt to detect rate limits and read the reset time from the error message.
 
-**OpenCode** — runs `opencode providers list` for auth, `opencode models` for available models, `opencode stats --models` for usage stats. Accepts `"opencode"`, `"opencode-free"`, `"opencode-zen"`, and `"opencode-go"` as provider names.
+OpenCode runs `opencode providers list` for auth, `opencode models` for available models, and `opencode stats --models` for usage stats. It accepts `"opencode"`, `"opencode-free"`, `"opencode-zen"`, and `"opencode-go"` as provider names.
 
 ## parse_rate_limit_error
 
@@ -59,14 +59,14 @@ except AgentProcessError as e:
 ```
 
 Returns a dict with:
-- `provider` (str) — the provider name
-- `rate_limited` (bool) — whether this looks like a rate-limit error
-- `resets_in_seconds` (int or None) — seconds until the rate limit resets (parsed from error message)
+- `provider` (str): the provider name
+- `rate_limited` (bool): whether this looks like a rate-limit error
+- `resets_in_seconds` (int or None): seconds until the rate limit resets, parsed from the error message
 
 Recognizes rate-limit patterns for:
-- **Gemini** — `"You have exhausted your capacity on this model. Your quota will reset after Xs"`
-- **OpenCode** — `"rate limit"`, `"quota exceeded"`, `"capacity"`, `"too many requests"` in stderr
-- **Claude** — `"rate limit"` or `"overloaded"` in stderr
+- Gemini: `"You have exhausted your capacity on this model. Your quota will reset after Xs"`
+- OpenCode: `"rate limit"`, `"quota exceeded"`, `"capacity"`, `"too many requests"` in stderr
+- Claude: `"rate limit"` or `"overloaded"` in stderr
 
 ## Auth Methods
 
@@ -226,3 +226,6 @@ print(result)  # {"raw": "..."}
 ```
 
 Claude only.
+
+---
+[← MCP and Approval Modes](mcp-approval.md) · [Home](index.md) · [Provider Internals →](provider-internals.md)

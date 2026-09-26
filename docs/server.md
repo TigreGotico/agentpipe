@@ -34,8 +34,60 @@ curl http://localhost:8000/v1/chat/completions \
 | `aider/...` | Aider |
 | `vibe/...` | Mistral Vibe |
 
-Agents are auto-created from the model name. Sessions persist — use the
-`user` field to control session identity for multi-turn conversations.
+Every request is independent, the way the OpenAI API defines it: it gets its
+own agent, resumes nothing, and leaves nothing behind. Send the `user` field to
+opt into a server-side session — requests that carry the same `user` share one
+agent and one conversation, so a multi-turn client can leave history out of the
+request body.
+
+The part before the first slash names the provider. It is removed before the
+CLI sees the model unless it is a namespace the provider uses itself, so
+`aider/openrouter/google/...` reaches aider as `openrouter/google/...` while
+`kilo/kilo-auto/free` reaches kilo unchanged.
+
+When the provider fails, the response is an HTTP error. A failure is never
+answered with 200 and the error text in the assistant message, which a client
+would read as a real reply.
+
+This surface is a chat endpoint, so its agents are built with the `default`
+approval mode and the provider CLIs' file and shell tools stay behind their own
+permission prompts, which a non-interactive run cannot answer. Set
+`AGENTPIPE_OPENAI_APPROVAL=bypass` for a deployment that wants those tools
+reachable from a request body.
+
+### Stateless mode
+
+A request that sends no `user` never has a session, so nothing is shared
+between callers by default. `AGENTPIPE_STATELESS=1` goes one step further and
+refuses to keep a session even for a request that does send `user`, for a
+deployment that wants no server-side conversation history at all.
+
+```bash
+AGENTPIPE_STATELESS=1 uvicorn agentpipe.server:app --host 0.0.0.0 --port 8000
+```
+
+Stateless mode governs the OpenAI surface only. The native `/agents/*`
+endpoints work with agents an operator created by name, whose sessions are the
+point, and they keep them.
+
+A per-request agent has no shared lock to serialize it, so
+`AGENTPIPE_MAX_CONCURRENCY` (default 4) bounds how many provider subprocesses
+may run at once. That bound is global and it now applies to every request
+without a `user`, which is most traffic on a default server. Four such
+requests can run at once and the fifth waits, where a server that kept one
+agent per model used to run one per model in parallel. Raise
+`AGENTPIPE_MAX_CONCURRENCY` if the box can afford more provider subprocesses
+than that.
+
+The provider CLIs keep their own records: opencode writes every conversation to
+a SQLite database under `~/.local/share/opencode`. Stateless mode governs
+agentpipe, not the CLI's own store, so a deployment that must keep history off
+disk backs those directories with memory as well. `docker-compose.stateless.yml`
+does both, and mounts nothing from the host:
+
+```bash
+docker compose -f docker-compose.stateless.yml up -d
+```
 
 ### Streaming
 
@@ -45,9 +97,20 @@ curl http://localhost:8000/v1/chat/completions \
   -d '{"model":"kilo/kilo-auto/free","messages":[{"role":"user","content":"Write code"}],"stream":true}'
 ```
 
-Returns OpenAI-compatible SSE chunks with `[DONE]` termination.
+Returns OpenAI-compatible SSE chunks and always ends with a chunk carrying
+`finish_reason: "stop"` right before `[DONE]`, so strict clients that wait
+for a terminal `finish_reason` do not hang.
 
-## Native API — Persistent Sessions
+Whether the content arrives token-by-token depends on the underlying CLI.
+`claude`, `gemini`, and `qoder` run with a streaming JSON output mode, so
+agentpipe forwards their output as it is produced and you get real
+incremental chunks. `aider`, `antigravity`, `kilo`, `mimocode`, `opencode`,
+and `vibe` do not have a streaming CLI mode agentpipe can use, so their
+answer arrives as a single content chunk once the CLI process finishes,
+followed immediately by the terminal chunk. Both cases are valid
+OpenAI-compatible streams; only the first group gives a latency benefit.
+
+## Native API: Persistent Sessions
 
 Create named agents with specific configuration, then send prompts.
 Sessions persist across requests automatically.
@@ -114,31 +177,37 @@ curl http://localhost:8000/health
 
 ## Docker
 
-The container bundles **6 provider CLIs** (kilo, opencode, gemini, aider,
-vibe, qodercli) — all ready to use without any auth setup for their
-free-tier models. **Claude Code** is **not pre-installed** (install
-manually, see below). On startup it checks what's available and what
-auth is configured.
+The image is published at `ghcr.io/tigregotico/agentpipe:latest`, built from
+`dev` on every push. It bundles 6 provider CLIs (kilo, opencode, gemini, aider,
+vibe, qodercli). Each works without any auth setup for its free-tier models.
+Claude Code is not pre-installed. See the manual install steps below. On
+startup, the container checks what is available and what auth is configured.
+
+For the guided version of everything here, including running behind
+ovos-persona-server, read
+[A Free OpenAI-Compatible Endpoint](free-llm-endpoint.md).
 
 ### Quick start
 
 ```bash
-# First run — create a .env file with your API keys
-echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
+docker run -d --name agentpipe -p 8000:8000 \
+  -e AGENTPIPE_STATELESS=1 \
+  ghcr.io/tigregotico/agentpipe:latest
+```
 
-# Start the server
+Or with the workstation compose file, which mounts your project and your CLI
+logins. API keys are optional — free-tier kilo and opencode need none:
+
+```bash
+echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env   # optional
 docker compose up
 ```
 
-The image is auto-built and published to `ghcr.io/tigregotico/agentpipe:latest`
-on every push to `dev`.
-
 ### Free-tier: no auth needed
 
-**kilo** and **opencode** work immediately with their free-tier default
-models (`kilo/kilo-auto/free` and `opencode/big-pickle`). No API keys,
-no accounts. Just `docker compose up` and use them.
+`kilo` and `opencode` work immediately with their free-tier default
+models (`kilo/kilo-auto/free` and `opencode/big-pickle`). They need no
+API keys and no accounts. Run `docker compose up` and use them.
 
 ### API keys
 
@@ -156,38 +225,42 @@ Keys can be set via environment variables (in a `.env` file or shell):
 Only needed if you want to use authenticated/pro features. Free-tier
 models on kilo/opencode work without any of this.
 
-CLI auth state can be persisted by mounting host directories into the
-container:
+You can mount host login state into the container, or log in inside the
+container and keep the result in a named volume. Exact paths per CLI, a
+copy-pasteable compose snippet, and the security trade-off are in
+**[Sharing Credentials with the Container](credentials.md)**.
 
-| Host path | Container path | Provider |
-|-----------|---------------|----------|
-| `~/.local/share/kilo/` | `/root/.local/share/kilo/` | Kilo Code |
-| `~/.config/opencode/` | `/root/.config/opencode/` | OpenCode |
-| `~/.claude/` | `/root/.claude/` | Claude Code |
-| `~/.config/gemini/` | `/root/.config/gemini/` | Gemini CLI |
-| `~/.vibe/` | `/root/.vibe/` | Mistral Vibe |
+To see what the running container has:
+
+```bash
+docker compose run --rm agentpipe python -m agentpipe.provision
+```
 
 To run interactive auth setup:
 
 ```bash
 docker compose run --rm agentpipe kilo auth login
-docker compose run --rm agentpipe claude auth login
 ```
+
+Claude Code is not in the image, so `claude auth login` only works after the
+manual install below.
 
 ### Claude Code (manual install)
 
-Claude Code requires a Cloudflare-gated installer and Anthropic auth,
-so it's not pre-installed. To add it:
+Claude Code needs an installer and Anthropic auth, so it's not
+pre-installed. To add it:
 
 ```bash
 # Run the installer inside the container
-docker compose run --rm agentpipe bash -c "curl -fsSL https://claude.ai/install | bash"
+docker compose run --rm agentpipe bash -c "curl -fsSL https://claude.ai/install.sh | bash"
 
 # Then authenticate
 docker compose run --rm agentpipe claude auth login
 ```
 
-The `~/.claude/` mount in `docker-compose.yml` persists the session.
+The `~/.claude/` mount in `docker-compose.yml` persists the session. The
+install itself does not survive a restart — bake it into your own image if
+you need it permanently.
 
 ### Working directory
 
@@ -195,6 +268,9 @@ Your current directory is mounted at `/workspace` inside the container.
 Set `AGENTPIPE_CWD=/workspace` to have agents operate on your project files.
 
 ### Build locally
+
+Only needed for unreleased changes or a modified `Dockerfile`. Uncomment the
+`build: .` line in the compose file, then:
 
 ```bash
 docker compose build
@@ -219,3 +295,6 @@ When creating an agent via the native API, the `AgentConfig` object supports:
 | `allowed_tools` | list[str] | None | Tool allow list |
 | `disallowed_tools` | list[str] | None | Tool deny list |
 | `effort` | str | None | Effort level (low, medium, high) |
+
+---
+[← Model Cascade](cascade.md) · [Home](index.md) · [MCP and Approval Modes →](mcp-approval.md)
