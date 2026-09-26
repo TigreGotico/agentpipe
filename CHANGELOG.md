@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.4a3](https://github.com/TigreGotico/agentpipe/tree/0.6.4a3) (2026-09-26)
+
+[Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.4a2...0.6.4a3)
+
+**Merged pull requests:**
+
+- Update python Docker tag to v3.14 [\#6](https://github.com/TigreGotico/agentpipe/pull/6) ([renovate[bot]](https://github.com/apps/renovate))
+
 ## [0.6.4a2](https://github.com/TigreGotico/agentpipe/tree/0.6.4a2) (2026-08-31)
 
 [Full Changelog](https://github.com/TigreGotico/agentpipe/compare/0.6.4a1...0.6.4a2)
